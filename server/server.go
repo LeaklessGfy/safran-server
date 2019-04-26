@@ -34,6 +34,7 @@ func NewServer() (*Server, error) {
 
 // Start will start the http server and setup routes
 func (s Server) Start() error {
+	http.HandleFunc("/simple", s.simpleHandler)
 	http.HandleFunc("/upload", s.uploadHandler)
 	http.HandleFunc("/events", s.eventsHandler)
 	log.Println("Server Start on :8888")
@@ -41,7 +42,16 @@ func (s Server) Start() error {
 	return http.ListenAndServe(":8888", nil)
 }
 
+func (s Server) simpleHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	s.reports <- entity.NewReport()
+
+	fmt.Fprintf(w, "toto\n")
+}
+
 func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	r.ParseMultipartForm(32 << 20)
 
 	jsonR := json.NewEncoder(w)
@@ -124,7 +134,7 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		fmt.Fprintf(w, "%s", report)
+		fmt.Fprintf(w, "%+v\n", report)
 		flusher.Flush()
 	}
 }
