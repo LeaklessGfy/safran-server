@@ -3,7 +3,6 @@ package service
 import (
 	"errors"
 	"io"
-	"log"
 
 	"github.com/leaklessgfy/safran-server/entity"
 	"github.com/leaklessgfy/safran-server/utils"
@@ -13,24 +12,32 @@ import (
 
 // ImportService is the service use to orchestrate parsing and inserting inside influx
 type ImportService struct {
-	influx *InfluxService
+	influx        *InfluxService
+	samplesParser *parser.SamplesParser
+	alarmsParser  *parser.AlarmsParser
 }
 
 // NewImportService create the import service
-func NewImportService() (*ImportService, error) {
-	influx, err := NewInfluxService()
+func NewImportService(influx *InfluxService, samplesReader, alarmsReader io.Reader) (*ImportService, error) {
+	err := influx.Ping()
+
 	if err != nil {
 		return nil, err
 	}
-	return &ImportService{influx}, nil
+
+	samplesParser := parser.NewSamplesParser(samplesReader)
+	alarmsParser := parser.NewAlarmsParser(alarmsReader)
+
+	return &ImportService{
+		influx:        influx,
+		samplesParser: samplesParser,
+		alarmsParser:  alarmsParser,
+	}, nil
 }
 
 // ImportExperiment will import the experiment
-func (i ImportService) ImportExperiment(experiment entity.Experiment, samplesReader io.Reader) (entity.Experiment, error) {
-	samplesParser := parser.NewSamplesParser(samplesReader)
-
-	// parse metadata
-	header, err := samplesParser.ParseHeader()
+func (i ImportService) ImportExperiment(experiment entity.Experiment) (entity.Experiment, error) {
+	header, err := i.samplesParser.ParseHeader()
 	if err != nil {
 		return experiment, errors.New("{Parse Header} - " + err.Error())
 	}
@@ -47,45 +54,67 @@ func (i ImportService) ImportExperiment(experiment entity.Experiment, samplesRea
 		return experiment, errors.New("{Insert Experiment} - " + err.Error())
 	}
 
-	// parse measures
-	measures, err := samplesParser.ParseMeasures()
-	if err != nil {
-		i.influx.RemoveExperiment(experiment.ID)
-		return experiment, errors.New("{Parse Measures} - " + err.Error())
-	}
-	measuresID, err := i.influx.InsertMeasures(experiment.ID, measures)
-	if err != nil {
-		i.influx.RemoveExperiment(experiment.ID)
-		return experiment, errors.New("{Insert Measures} - " + err.Error())
-	}
-
-	// parse samples
-	samplesParser.ParseSamples(len(measures), func(samples []*entity.Sample) {
-		err := i.influx.InsertSamples(experiment.ID, measuresID, experiment.StartDate, samples)
-		if err != nil {
-			//i.influx.RemoveExperiment(experimentID)
-			log.Println(err)
-		}
-	})
-
 	return experiment, nil
 }
 
-// ImportAlarms will import the alarms
-func (i ImportService) ImportAlarms(experiment entity.Experiment, alarmsReader io.Reader) error {
-	if alarmsReader == nil {
-		return nil
-	}
-	alarmsParser := parser.NewAlarmsParser(alarmsReader)
-	alarms, err := alarmsParser.ParseAlarms()
+func (i ImportService) ImportSamples(report entity.Report, experiment entity.Experiment, reports chan entity.Report) {
+	measures, err := i.samplesParser.ParseMeasures()
 	if err != nil {
-		i.influx.RemoveExperiment(experiment.ID)
-		return errors.New("{Parse Alarms} - " + err.Error())
+		report.AddError(err)
+		if errRemove := i.influx.RemoveExperiment(experiment.ID); errRemove != nil {
+			report.AddError(errRemove)
+		}
+		reports <- report
+		return
 	}
+
+	measuresID, err := i.influx.InsertMeasures(experiment.ID, measures)
+	if err != nil {
+		report.AddError(err)
+		if errRemove := i.influx.RemoveExperiment(experiment.ID); errRemove != nil {
+			report.AddError(errRemove)
+		}
+		reports <- report
+		return
+	}
+
+	i.samplesParser.ParseSamples(len(measuresID), func(samples []*entity.Sample) {
+		err := i.influx.InsertSamples(experiment.ID, measuresID, experiment.StartDate, samples)
+		if err != nil {
+			//i.influx.RemoveExperiment(experimentID)
+			report.AddError(err)
+		}
+		reports <- report
+	})
+
+	reports <- report
+}
+
+// ImportAlarms will import the alarms
+func (i ImportService) ImportAlarms(report entity.Report, experiment entity.Experiment, reports chan entity.Report) {
+	if i.alarmsParser == nil {
+		return
+	}
+
+	alarms, err := i.alarmsParser.ParseAlarms()
+	if err != nil {
+		report.AddError(err)
+		if errRemove := i.influx.RemoveExperiment(experiment.ID); errRemove != nil {
+			report.AddError(errRemove)
+		}
+		reports <- report
+		return
+	}
+
 	err = i.influx.InsertAlarms(experiment.ID, experiment.StartDate, alarms)
 	if err != nil {
-		i.influx.RemoveExperiment(experiment.ID)
-		return errors.New("{Insert Alarms} - " + err.Error())
+		report.AddError(err)
+		if errRemove := i.influx.RemoveExperiment(experiment.ID); errRemove != nil {
+			report.AddError(errRemove)
+		}
+		reports <- report
+		return
 	}
-	return nil
+
+	reports <- report
 }

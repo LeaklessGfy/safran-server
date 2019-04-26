@@ -14,14 +14,10 @@ func ParseDate(str string) (time.Time, error) {
 
 // ParseTime parse a time representation (ex: 12:03:00 or 12:04:05.555) to Time struct
 func ParseTime(str string, date time.Time) (time.Time, error) {
-	year := date.Year()
-	month := date.Month()
-	day := date.Day()
 	hour := date.Hour()
 	min := date.Minute()
 	sec := date.Second()
 	nano := date.Nanosecond()
-	loc := time.UTC
 
 	strSplit := strings.FieldsFunc(str, func(r rune) bool {
 		return r == ':' || r == '.' || r == ','
@@ -40,5 +36,5 @@ func ParseTime(str string, date time.Time) (time.Time, error) {
 		return date, errors.New("Bad time formatting " + str)
 	}
 
-	return time.Date(year, month, day, hour, min, sec, nano, loc), nil
+	return time.Date(date.Year(), date.Month(), date.Day(), hour, min, sec, nano, date.Location()), nil
 }

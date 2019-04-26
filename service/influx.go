@@ -25,21 +25,25 @@ func NewInfluxService() (*InfluxService, error) {
 	}
 	defer c.Close()
 
-	_, _, err = c.Ping(0)
-	if err != nil {
-		return nil, err
-	}
+	influx := &InfluxService{c}
 
-	query := client.NewQuery("CREATE DATABASE safran_db", "", "")
-	response, err := c.Query(query)
+	return influx, influx.Ping()
+}
+
+func (i InfluxService) Ping() error {
+	_, _, err := i.c.Ping(0)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	query := client.NewQuery("CREATE DATABASE safran_db", "", "")
+	response, err := i.c.Query(query)
+	if err != nil {
+		return err
 	}
 	if response.Error() != nil {
-		return nil, response.Error()
+		return response.Error()
 	}
-
-	return &InfluxService{c}, nil
+	return nil
 }
 
 // InsertExperiment will insert an experiment into influx db
