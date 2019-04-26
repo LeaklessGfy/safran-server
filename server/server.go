@@ -113,6 +113,8 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("New Client")
+
 	flusher, ok := w.(http.Flusher)
 
 	if !ok {
@@ -134,7 +136,9 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		fmt.Fprintf(w, "%+v\n", report)
+		log.Println(report)
+
+		fmt.Fprintf(w, "data: %+v\n\n", report)
 		flusher.Flush()
 	}
 }
