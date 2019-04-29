@@ -57,64 +57,67 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	jsonR := json.NewEncoder(w)
 	report := entity.NewReport()
 
+	// EXPERIMENT
 	experimentValue := r.FormValue("experiment")
 	if experimentValue == "" {
 		report.AddError(errors.New("experiment info is required"))
 		jsonR.Encode(report)
 		return
 	}
-
-	samplesFile, _, err := r.FormFile("samples")
-	if err != nil {
-		report.AddError(errors.New("samples is required"))
-		report.AddError(err)
-		jsonR.Encode(report)
-		return
-	}
-	defer samplesFile.Close()
-
-	alarmsFile, _, _ := r.FormFile("alarms")
-	if alarmsFile != nil {
-		report.HasAlarms = true
-		defer alarmsFile.Close()
-	}
-
 	var experiment entity.Experiment
-	err = json.Unmarshal([]byte(experimentValue), &experiment)
+	err := json.Unmarshal([]byte(experimentValue), &experiment)
 	if err != nil {
 		jsonR.Encode(report.AddError(err))
 		return
 	}
-
 	err = experiment.Validate()
 	if err != nil {
 		jsonR.Encode(report.AddError(err))
 		return
 	}
 
-	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile)
+	// FILES
+	samplesFile, samplesSize, err := service.ExtractSamples(r)
+	if err != nil {
+		jsonR.Encode(report.AddError(err))
+		return
+	}
+	defer samplesFile.Close()
+
+	alarmsFile, _, err := service.ExtractAlarms(r)
+	if err != nil {
+		jsonR.Encode(report.AddError(err))
+		return
+	}
+	if alarmsFile != nil {
+		report.HasAlarms = true
+		defer alarmsFile.Close()
+	}
+
+	// IMPORT
+	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile, samplesSize)
 	if err != nil {
 		jsonR.Encode(report.AddError(err))
 		return
 	}
 
-	experiment, err = importService.ImportExperiment(experiment)
+	experiment, size, err := importService.ImportExperiment(experiment)
 	if err != nil {
 		jsonR.Encode(report.AddError(err))
 		return
 	}
 
 	report.ExperimentID = experiment.ID
+	report.Progress = int(int64(size*100) / samplesSize)
 
 	go importService.ImportSamples(report, experiment, s.reports)
 	go importService.ImportAlarms(report, experiment, s.reports)
 
+	s.reports <- report
 	jsonR.Encode(report)
 }
 
 func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("New Client")
-
 	flusher, ok := w.(http.Flusher)
 
 	if !ok {
@@ -126,19 +129,29 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(200)
+	i := 1
 
 	for {
 		report := <-s.reports
 
+		b, err := json.Marshal(report)
+		if err != nil {
+			log.Fatal("Can't convert to JSON")
+		}
+
+		fmt.Println(b)
+		fmt.Fprintf(w, "id: %d\n", i)
+		fmt.Fprintf(w, "data: %s\n\n", b)
+
+		i++
+		flusher.Flush()
+	}
+	/*
 		if len(report.Errors) > 0 {
 			if err := s.influx.RemoveExperiment(report.ExperimentID); err != nil {
 				report.AddError(err)
 			}
 		}
-
-		log.Println(report)
-
-		fmt.Fprintf(w, "data: %+v\n\n", report)
-		flusher.Flush()
-	}
+	*/
 }

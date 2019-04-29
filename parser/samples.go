@@ -28,49 +28,52 @@ func NewSamplesParser(reader io.Reader) *SamplesParser {
 }
 
 // ParseHeader parse the start and end date of the file
-func (p SamplesParser) ParseHeader() (*Header, error) {
-	startDate, err := p.parseDate()
+func (p SamplesParser) ParseHeader() (*Header, int, error) {
+	startDate, sizeStart, err := p.parseDate()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	endDate, err := p.parseDate()
+	endDate, sizeEnd, err := p.parseDate()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return &Header{startDate, endDate}, nil
+	return &Header{startDate, endDate}, sizeStart + sizeEnd, nil
 }
 
 // ParseMeasures parse the measures of the file
-func (p SamplesParser) ParseMeasures() ([]*entity.Measure, error) {
-	measures, err := p.parseMeasures()
+func (p SamplesParser) ParseMeasures() ([]*entity.Measure, int, error) {
+	measures, sizeM, err := p.parseMeasures()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	types, err := parseLine(p.scanner, 2, 0)
+	types, sizeT, err := parseLine(p.scanner, 2, 0)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	units, err := parseLine(p.scanner, 2, 0)
+	units, sizeU, err := parseLine(p.scanner, 2, 0)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	err = p.mergeTypesUnits(measures, types, units)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return measures, nil
+	return measures, sizeM + sizeT + sizeU, nil
 }
 
 // ParseSamples parse the samples of the file
-func (p SamplesParser) ParseSamples(size int, executor func([]*entity.Sample)) {
+func (p SamplesParser) ParseSamples(size int, executor func([]*entity.Sample, int, bool)) {
 	for true {
 		var samples []*entity.Sample
+		var size int
 		for n := 0; n < 500; n++ {
 			if !p.scanner.Scan() {
-				executor(samples)
+				executor(samples, size, true)
 				return
 			}
 			line := p.scanner.Text()
+			b := []byte(line)
+			size += len(b)
 			arr := strings.Split(line, separator)
 			for i := 2; i < len(arr); i++ {
 				if len(arr[i]) > 0 && arr[i] != nan && i < size {
@@ -78,32 +81,33 @@ func (p SamplesParser) ParseSamples(size int, executor func([]*entity.Sample)) {
 				}
 			}
 		}
-		executor(samples)
+		executor(samples, size, false)
 	}
 }
 
-func (p SamplesParser) parseDate() (string, error) {
-	arr, err := parseLine(p.scanner, 1, 1)
+func (p SamplesParser) parseDate() (string, int, error) {
+	arr, size, err := parseLine(p.scanner, 1, 1)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if len(arr) < 1 {
-		return "", errors.New("")
+		return "", 0, errors.New("")
 	}
-	return arr[0], nil
+	return arr[0], size, nil
 }
 
-func (p SamplesParser) parseMeasures() ([]*entity.Measure, error) {
-	arr, err := parseLine(p.scanner, 2, 0)
+func (p SamplesParser) parseMeasures() ([]*entity.Measure, int, error) {
+	arr, size, err := parseLine(p.scanner, 2, 0)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var measures []*entity.Measure
 	for _, m := range arr {
 		measures = append(measures, &entity.Measure{Name: m})
 	}
 	p.scanner.Scan()
-	return measures, nil
+	b := []byte(p.scanner.Text())
+	return measures, size + len(b), nil
 }
 
 func (p SamplesParser) mergeTypesUnits(measures []*entity.Measure, types, units []string) error {

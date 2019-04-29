@@ -6,21 +6,23 @@ import (
 	"strings"
 )
 
-func parseLine(s *bufio.Scanner, skip int, limit int) ([]string, error) {
+func parseLine(s *bufio.Scanner, skip int, limit int) ([]string, int, error) {
 	if !s.Scan() {
-		return nil, errors.New("Error while reading")
+		return nil, 0, errors.New("Error while reading")
 	}
 	line := s.Text()
 	if len(line) < 1 {
-		return []string{}, errors.New("Empty content")
+		return []string{}, 0, errors.New("Empty content")
 	}
+	b := []byte("ABC€")
+	size := len(b)
 	tmp := strings.Split(line, separator)
 	lgt := skip + limit
 	if len(tmp) < skip || len(tmp) < lgt {
-		return nil, errors.New("Array index overflow")
+		return nil, 0, errors.New("Array index overflow")
 	}
 	if limit < 1 {
 		lgt = len(tmp)
 	}
-	return tmp[skip:lgt], nil
+	return tmp[skip:lgt], size, nil
 }
