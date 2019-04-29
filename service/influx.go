@@ -121,9 +121,9 @@ func (i InfluxService) RemoveExperiment(experimentID string) error {
 	var queries []client.Query
 
 	query1 := client.NewQuery(fmt.Sprintf(`DELETE FROM experiments WHERE "id"='%s'`, experimentID), "safran_db", "")
-	query2 := client.NewQuery(fmt.Sprintf(`DELETE FROM measures WHERE "experimentId"='%s'`, experimentID), "safran_db", "")
-	query3 := client.NewQuery(fmt.Sprintf(`DELETE FROM samples WHERE "experimentId"='%s'`, experimentID), "safran_db", "")
-	query4 := client.NewQuery(fmt.Sprintf(`DELETE FROM alarms WHERE "experimentId"='%s'`, experimentID), "safran_db", "")
+	query2 := client.NewQuery(fmt.Sprintf(`DELETE FROM measures WHERE "experimentID"='%s'`, experimentID), "safran_db", "")
+	query3 := client.NewQuery(fmt.Sprintf(`DELETE FROM samples WHERE "experimentID"='%s'`, experimentID), "safran_db", "")
+	query4 := client.NewQuery(fmt.Sprintf(`DELETE FROM alarms WHERE "experimentID"='%s'`, experimentID), "safran_db", "")
 
 	queries = append(queries, query1)
 	queries = append(queries, query2)
@@ -178,7 +178,7 @@ func buildMeasurePoint(experimentID string, measure *entity.Measure) (string, *c
 	}
 	tags := map[string]string{
 		"id":           id.String(),
-		"experimentId": experimentID,
+		"experimentID": experimentID,
 	}
 	fiels := map[string]interface{}{
 		"name": measure.Name,
@@ -191,8 +191,8 @@ func buildMeasurePoint(experimentID string, measure *entity.Measure) (string, *c
 
 func buildSamplePoint(experimentID, measureID string, experimentDate time.Time, sample *entity.Sample) (*client.Point, error) {
 	tags := map[string]string{
-		"experimentId": experimentID,
-		"measureId":    measureID,
+		"experimentID": experimentID,
+		"measureID":    measureID,
 	}
 	fiels := map[string]interface{}{
 		"value": sample.Value,
@@ -216,5 +216,6 @@ func buildAlarmPoint(experimentID string, experimentDate time.Time, alarm *entit
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(experimentDate, date)
 	return client.NewPoint("alarms", tags, fields, date)
 }
