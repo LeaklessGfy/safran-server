@@ -147,11 +147,4 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 		i++
 		flusher.Flush()
 	}
-	/*
-		if len(report.Errors) > 0 {
-			if err := s.influx.RemoveExperiment(report.ExperimentID); err != nil {
-				report.AddError(err)
-			}
-		}
-	*/
 }

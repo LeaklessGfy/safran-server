@@ -100,9 +100,6 @@ func (i ImportService) ImportSamples(report entity.Report, experiment entity.Exp
 		}
 		reports <- report
 	})
-
-	//report.Progress = int(int64(sizeMeasures*100) / i.samplesSize)
-	//reports <- report
 }
 
 // ImportAlarms will import the alarms

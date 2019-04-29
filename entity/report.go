@@ -5,14 +5,14 @@ const StatusSuccess = "success"
 const StatusPending = "pending"
 
 type Report struct {
-	Status       string  `json:"status"`
-	Progress     int     `json:"progress"`
-	Errors       []error `json:"errors"`
-	ExperimentID string  `json:"experimentID"`
-	HasAlarms    bool    `json:"hasAlarms"`
+	Status       string   `json:"status"`
+	Progress     int      `json:"progress"`
+	Errors       []string `json:"errors"`
+	ExperimentID string   `json:"experimentID"`
+	HasAlarms    bool     `json:"hasAlarms"`
 }
 
-func NewReport(err ...error) Report {
+func NewReport(err ...string) Report {
 	return Report{
 		Status:       StatusPending,
 		Progress:     0,
@@ -34,6 +34,6 @@ func CopyReport(report Report) Report {
 
 func (r *Report) AddError(err error) *Report {
 	r.Status = StatusFail
-	r.Errors = append(r.Errors, err)
+	r.Errors = append(r.Errors, err.Error())
 	return r
 }
