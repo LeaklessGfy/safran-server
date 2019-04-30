@@ -9,7 +9,11 @@ import (
 
 // ParseDate parse a date representation (ex: ) to Time struct
 func ParseDate(str string) (time.Time, error) {
-	return time.Parse("2006-01-02T15:04:05.000", str)
+	t, err := time.Parse("2006-01-02T15:04:05.000", str)
+	if err != nil {
+		return t, err
+	}
+	return t.UTC(), nil
 }
 
 // ParseTime parse a time representation (ex: 12:03:00 or 12:04:05.555) to Time struct
@@ -36,5 +40,5 @@ func ParseTime(str string, date time.Time) (time.Time, error) {
 		return date, errors.New("Bad time formatting " + str)
 	}
 
-	return time.Date(date.Year(), date.Month(), date.Day(), hour, min, sec, nano, date.Location()), nil
+	return time.Date(date.Year(), date.Month(), date.Day(), hour, min, sec, nano, time.UTC).UTC(), nil
 }
