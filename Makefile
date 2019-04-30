@@ -1,19 +1,19 @@
-all:
-	make run
+events:
+	http --stream get http://localhost:8888/events
 
-build:
-	docker build -t mygo .
+uploadsmall:
+	http -f POST \
+		http://localhost:8888/upload \
+		experiment='{"reference": "small", "name": "small", "bench": "small", "campaign": "small"}' \
+		samples@./csv/smallfile.csv \
+		alarms@./csv/event.csv
 
-run:
-	docker run -it --rm --name mygocontainer -p 8088:8088 -v ${PWD}:/go/src/app mygo
+uploadtest:
+	http -f POST \
+		http://localhost:8888/upload \
+		experiment='{"reference": "test", "name": "test", "bench": "test", "campaign": "test"}' \
+		samples@./csv/testfile.csv \
+		alarms@./csv/event.csv
 
-dockerbuild:
-	docker run --rm -v ${PWD}:/usr/src/myapp -w /usr/src/myapp -e GOOS=darwin golang:1.8 go run -v
-
-dockerrun:
-	go get -v ./...
-	go install -v ./...
-	app
-
-clientrun:
-	./myapp
+simple:
+	http get http://localhost:8888/simple

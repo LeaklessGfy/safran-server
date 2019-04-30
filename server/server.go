@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -37,6 +36,8 @@ func (s Server) Start() error {
 	http.HandleFunc("/simple", s.simpleHandler)
 	http.HandleFunc("/upload", s.uploadHandler)
 	http.HandleFunc("/events", s.eventsHandler)
+	http.HandleFunc("/install", s.installHandler)
+	http.HandleFunc("/drop", s.dropHandler)
 	log.Println("Server Start on :8888")
 
 	return http.ListenAndServe(":8888", nil)
@@ -44,33 +45,21 @@ func (s Server) Start() error {
 
 func (s Server) simpleHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	s.reports <- entity.NewReport()
-
-	fmt.Fprintf(w, "toto\n")
+	w.Write([]byte("done\n"))
+	go func() {
+		s.reports <- entity.NewReport()
+	}()
 }
 
 func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	r.ParseMultipartForm(32 << 20)
 
 	jsonR := json.NewEncoder(w)
 	report := entity.NewReport()
 
 	// EXPERIMENT
-	experimentValue := r.FormValue("experiment")
-	if experimentValue == "" {
-		report.AddError(errors.New("experiment info is required"))
-		jsonR.Encode(report)
-		return
-	}
-	var experiment entity.Experiment
-	err := json.Unmarshal([]byte(experimentValue), &experiment)
-	if err != nil {
-		jsonR.Encode(report.AddError(err))
-		return
-	}
-	err = experiment.Validate()
+	experiment, err := service.ExtractExperiment(r)
 	if err != nil {
 		jsonR.Encode(report.AddError(err))
 		return
@@ -84,7 +73,7 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer samplesFile.Close()
 
-	alarmsFile, _, err := service.ExtractAlarms(r)
+	alarmsFile, alarmsSize, err := service.ExtractAlarms(r)
 	if err != nil {
 		jsonR.Encode(report.AddError(err))
 		return
@@ -95,25 +84,23 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// IMPORT
-	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile, samplesSize)
+	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile, samplesSize, alarmsSize, s.reports)
 	if err != nil {
 		jsonR.Encode(report.AddError(err))
 		return
 	}
 
-	experiment, size, err := importService.ImportExperiment(experiment)
+	err = importService.ImportExperiment(&report, experiment)
 	if err != nil {
 		jsonR.Encode(report.AddError(err))
 		return
 	}
-
-	report.ExperimentID = experiment.ID
-	report.Progress = int(int64(size*100) / samplesSize)
-
-	go importService.ImportSamples(report, experiment, s.reports)
-	go importService.ImportAlarms(report, experiment, s.reports)
 
 	s.reports <- report
+
+	go importService.ImportSamples(report, *experiment)
+	go importService.ImportAlarms(report, *experiment)
+
 	jsonR.Encode(report)
 }
 
@@ -129,22 +116,46 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(200)
 	i := 1
 
 	for {
-		report := <-s.reports
+		select {
+		case <-r.Context().Done():
+			return
+		case report := <-s.reports:
+			b, err := json.Marshal(report)
 
-		b, err := json.Marshal(report)
-		if err != nil {
-			log.Fatal("Can't convert to JSON")
+			if err != nil {
+				log.Fatal("Can't convert to JSON")
+			}
+
+			fmt.Fprintf(w, "id: %d\n", i)
+			fmt.Fprintf(w, "data: %s\n\n", b)
+
+			i++
+			flusher.Flush()
+
+			if report.Status == entity.StatusFail || report.Status == entity.StatusSuccess {
+				return
+			}
 		}
-
-		fmt.Println(b)
-		fmt.Fprintf(w, "id: %d\n", i)
-		fmt.Fprintf(w, "data: %s\n\n", b)
-
-		i++
-		flusher.Flush()
 	}
+}
+
+func (s Server) installHandler(w http.ResponseWriter, r *http.Request) {
+	err := s.influx.Install()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write([]byte("done\n"))
+}
+
+func (s Server) dropHandler(w http.ResponseWriter, r *http.Request) {
+	err := s.influx.Drop()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write([]byte("done\n"))
 }

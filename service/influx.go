@@ -35,15 +35,7 @@ func (i InfluxService) Ping() error {
 	if err != nil {
 		return err
 	}
-	query := client.NewQuery("CREATE DATABASE safran_db", "", "")
-	response, err := i.c.Query(query)
-	if err != nil {
-		return err
-	}
-	if response.Error() != nil {
-		return response.Error()
-	}
-	return nil
+	return i.Install()
 }
 
 // InsertExperiment will insert an experiment into influx db
@@ -143,6 +135,30 @@ func (i InfluxService) RemoveExperiment(experimentID string) error {
 	return nil
 }
 
+func (i InfluxService) Install() error {
+	query := client.NewQuery("CREATE DATABASE safran_db", "", "")
+	response, err := i.c.Query(query)
+	if err != nil {
+		return err
+	}
+	if response.Error() != nil {
+		return response.Error()
+	}
+	return nil
+}
+
+func (i InfluxService) Drop() error {
+	query := client.NewQuery(`DROP DATABASE "safran_db"`, "", "")
+	response, err := i.c.Query(query)
+	if err != nil {
+		return err
+	}
+	if response.Error() != nil {
+		return response.Error()
+	}
+	return nil
+}
+
 func buildBatchPoints() (client.BatchPoints, error) {
 	return client.NewBatchPoints(client.BatchPointsConfig{
 		Database:  "safran_db",
@@ -216,6 +232,5 @@ func buildAlarmPoint(experimentID string, experimentDate time.Time, alarm *entit
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(experimentDate, date)
 	return client.NewPoint("alarms", tags, fields, date)
 }

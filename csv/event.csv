@@ -1,0 +1,80 @@
+021 14:32:01.397;1;Start black box recording
+021 14:34:13.333;3;Add-oil message
+021 14:34:56.797;1;Start black box recording
+021 14:42:11.345;3;CHAN B : Perte de la protection survitesse sur une voie
+021 14:42:14.345;3;CHAN B : Perte de la protection survitesse sur une voie
+021 14:43:05.346;3;CHAN B : Perte de la protection survitesse sur une voie
+021 14:45:38.376;4;CAS EEC : PARAM EXCEED
+021 14:45:38.376;4;CAS EEC : PARAM EXCEED
+021 14:45:47.451;4;N1 discrepancy fault
+021 14:45:47.451;4;N1 discrepancy fault
+021 14:53:52.543;4;TAT/T12 consolidée invalide
+021 14:53:52.543;3;WOW vol
+021 14:53:52.557;3;WOW vol
+021 14:53:52.573;4;T50 discrepancy fault
+021 14:53:52.573;4;CHAN A : T495 local fault
+021 14:53:52.573;4;CHAN B : T495 local fault
+021 14:53:52.573;4;CHAN A : T50 local fault
+021 14:53:52.573;4;T50 discrepancy fault
+021 14:53:52.573;4;PS3 discrepancy fault
+021 14:53:52.573;4;T495 discrepancy fault
+021 14:53:52.573;4;T495 discrepancy fault
+021 14:53:52.573;3;CHAN A : PS3 local fault basse altitude
+021 14:53:52.573;3;CHAN A : T12 local fault
+021 14:53:52.573;3;CHAN B : T12 local fault
+021 14:53:52.573;3;CHAN B : PS3 local fault basse altitude
+021 14:53:52.573;4;CHAN B : T50 local fault
+021 14:53:52.573;4;PS3 discrepancy fault
+021 14:53:52.573;4;T12 discrepancy fault au sol
+021 14:53:52.573;4;T12 discrepancy fault au sol
+021 14:53:52.573;3;CHAN A : EOP local fault
+021 14:53:52.573;3;CHAN B : EOP local fault
+021 14:53:52.573;4;TRA discrepancy fault
+021 14:53:52.573;3;CHAN B : TRA local fault
+021 14:53:52.573;4;TRA discrepancy fault
+021 14:53:52.573;3;CHAN A : TRA local fault
+021 14:53:52.573;3;TAT selected fault au sol
+021 14:53:52.573;3;TAT selected fault au sol
+021 14:53:52.573;3;CHAN B : EOT local fault
+021 14:53:52.573;3;CHAN A : EOT local fault
+021 14:53:52.573;3;HPSOV discrepancy fault
+021 14:53:52.573;3;CHAN B : HPSOV Command fault sur voie active
+021 14:53:52.573;3;CHAN A : HPSOV Command fault sur voie active
+021 14:53:52.573;3;CHAN B : HPSOV Command fault sur voie passive
+021 14:53:52.573;4;CHAN B : VBV local fault
+021 14:53:52.573;4;CHAN A : VBV local fault
+021 14:53:52.573;3;CHAN A : HPSOV local fault
+021 14:53:52.573;3;HPSOV discrepancy fault
+021 14:53:52.573;3;CHAN B : HPSOV local fault
+021 14:53:52.573;3;CHAN A : VSV local fault
+021 14:53:52.573;3;CHAN B : VSV local fault
+021 14:53:52.573;4;VSV discrepancy fault
+021 14:53:52.573;4;VSV discrepancy fault
+021 14:53:52.573;4;VBV discrepancy fault
+021 14:53:52.573;4;VBV discrepancy fault
+021 14:53:52.573;4;CHAN A : VBV Command fault sur voie active
+021 14:53:52.573;4;CHAN B : VBV Command fault sur voie active
+021 14:53:52.573;3;CHAN B : VBV Command fault sur voie passive
+021 14:53:52.573;4;FMV discrepancy fault
+021 14:53:52.573;4;FMV discrepancy fault
+021 14:53:52.573;3;CHAN B : FMV local fault
+021 14:53:52.573;3;CHAN A : FMV local fault
+021 14:53:52.573;4;VBV dual fault
+021 14:53:52.573;3;CHAN B : FMV command fault sur voie passive
+021 14:53:52.573;4;CHAN B : FMV command fault sur voie active
+021 14:53:52.573;4;CHAN A : FMV command fault sur voie active
+021 14:53:52.573;3;CHAN B : VSV Command fault sur voie passive
+021 14:53:52.573;4;CHAN B : VSV Command fault sur voie active
+021 14:53:52.573;4;CHAN A : VSV Command fault sur voie active
+021 14:53:52.573;4;CHAN A : HBV1 command fault sur voie active
+021 14:53:52.573;3;CHAN B : HBV1 command fault sur voie passive
+021 14:53:52.573;4;CHAN B : HBV1 command fault sur voie active
+021 14:53:52.573;3;CHAN B : HBV2 command fault sur voie passive
+021 14:53:52.573;4;CHAN B : HBV2 command fault sur voie active
+021 14:53:52.573;4;CHAN A : HBV2 command fault sur voie active
+021 14:53:52.573;3;CHAN B : OSDS Wrap fault sur voie passive
+021 14:53:52.573;3;CHAN A : OSDS Wrap fault sur voie active
+021 14:53:52.573;4;HPTACC command fault failed closed
+021 14:57:08.420;1;Start black box recording
+021 15:00:12.890;1;Start black box recording
+021 15:03:00.921;1;Start black box recording
