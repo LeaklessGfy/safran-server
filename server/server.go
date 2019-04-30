@@ -26,7 +26,7 @@ func NewServer() (*Server, error) {
 	}
 
 	return &Server{
-		reports: make(chan entity.Report),
+		reports: make(chan entity.Report, 10),
 		influx:  influx,
 	}, nil
 }
@@ -45,10 +45,12 @@ func (s Server) Start() error {
 
 func (s Server) simpleHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Write([]byte("done\n"))
-	go func() {
-		s.reports <- entity.NewReport()
-	}()
+	select {
+	case s.reports <- entity.NewReport():
+		w.WriteHeader(200)
+	default:
+		http.Error(w, "no consumer", http.StatusNotFound)
+	}
 }
 
 func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
