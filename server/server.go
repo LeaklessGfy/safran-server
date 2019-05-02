@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/leaklessgfy/safran-server/entity"
+	uuid "github.com/satori/go.uuid"
 
 	"github.com/leaklessgfy/safran-server/service"
 )
@@ -20,14 +21,16 @@ type Server struct {
 // NewServer create a server instance
 func NewServer() (*Server, error) {
 	influx, err := service.NewInfluxService()
-
 	if err != nil {
 		return nil, err
 	}
 
+	imports := make(map[string]chan entity.Report)
+	imports["TEST"] = make(chan entity.Report, 10)
+
 	return &Server{
-		imports: make(map[string]chan entity.Report),
 		influx:  influx,
+		imports: imports,
 	}, nil
 }
 
@@ -46,7 +49,7 @@ func (s Server) Start() error {
 func (s Server) simpleHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	select {
-	case s.imports["test"] <- *entity.NewReport("Test"):
+	case s.imports["TEST"] <- *entity.NewReport("TEST", "Test"):
 		w.WriteHeader(200)
 	default:
 		http.Error(w, "no consumer", http.StatusNotFound)
@@ -57,8 +60,14 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	r.ParseMultipartForm(32 << 20)
 
+	channel, err := uuid.NewV4()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	jsonR := json.NewEncoder(w)
-	report := entity.NewReport("Experiment")
+	report := entity.NewReport(channel.String(), "Experiment")
 
 	// EXPERIMENT
 	experiment, err := service.ExtractExperiment(r)
@@ -88,10 +97,8 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		defer alarmsFile.Close()
 	}
 
-	s.imports["tt"] = make(chan entity.Report, 10)
-
 	// IMPORT
-	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile, samplesSize, alarmsSize, s.imports["tt"])
+	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile, samplesSize, alarmsSize)
 	if err != nil {
 		jsonR.Encode(report.AddError(entity.ReportStepInitImport, err))
 		return
@@ -104,8 +111,9 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go importService.ImportSamples(*report, *experiment)
-	go importService.ImportAlarms(*report, *experiment)
+	s.imports[channel.String()] = make(chan entity.Report, 10)
+	go importService.ImportSamples(*report, *experiment, s.imports[channel.String()])
+	go importService.ImportAlarms(*report, *experiment, s.imports[channel.String()])
 
 	jsonR.Encode(report)
 }
@@ -118,10 +126,9 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := r.URL.Query().Get("id")
-
-	if _, ok = s.imports[id]; !ok {
-		http.Error(w, "Undefined import id", http.StatusNotFound)
+	channel := r.URL.Query().Get("channel")
+	if _, ok = s.imports[channel]; !ok {
+		http.Error(w, "Undefined channel "+channel, http.StatusNotFound)
 		return
 	}
 
@@ -134,7 +141,7 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case report := <-s.imports[id]:
+		case report := <-s.imports[channel]:
 			b, err := json.Marshal(report)
 
 			if err != nil {
@@ -146,6 +153,8 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 
 			if report.HasComplete() {
+				close(s.imports[channel])
+				delete(s.imports, channel)
 				return
 			}
 		}

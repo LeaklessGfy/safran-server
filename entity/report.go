@@ -31,6 +31,7 @@ const (
 
 type Report struct {
 	ID           int               `json:"id"`
+	Channel      string            `json:"channel"`
 	Title        string            `json:"title"`
 	Status       string            `json:"status"`
 	ExperimentID string            `json:"experimentID"`
@@ -40,12 +41,13 @@ type Report struct {
 	Steps        map[string]bool   `json:"steps"`
 }
 
-func NewReport(title string) *Report {
+func NewReport(channel, title string) *Report {
 	steps := make(map[string]bool)
 	steps[ReportStepInit] = true
 	errors := make(map[string]string)
 	return &Report{
 		ID:           0,
+		Channel:      channel,
 		Title:        title,
 		Status:       ReportStatusPending,
 		ExperimentID: "",

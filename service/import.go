@@ -17,7 +17,6 @@ type ImportService struct {
 	alarmsParser  *parser.AlarmsParser
 	samplesSize   int64
 	alarmsSize    int64
-	reports       chan entity.Report
 	readSize      int64
 	lock          sync.Mutex
 }
@@ -27,7 +26,6 @@ func NewImportService(
 	influx *InfluxService,
 	samplesReader, alarmsReader io.Reader,
 	samplesSize, alarmsSize int64,
-	reports chan entity.Report,
 ) (*ImportService, error) {
 	if err := influx.Ping(); err != nil {
 		return nil, err
@@ -45,7 +43,6 @@ func NewImportService(
 		alarmsParser:  alarmsParser,
 		samplesSize:   samplesSize,
 		alarmsSize:    alarmsSize,
-		reports:       reports,
 	}, nil
 }
 
@@ -78,18 +75,18 @@ func (i *ImportService) ImportExperiment(report *entity.Report, experiment *enti
 }
 
 // ImportSamples will import measures and samples
-func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Experiment) {
+func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Experiment, channel chan entity.Report) {
 	report.Title = "Measure"
 	measures, sizeMeasures, err := i.samplesParser.ParseMeasures()
 	report.Progress = i.addSize(sizeMeasures)
 	if i.handleError(err, &report, entity.ReportStepParseMeasures) {
-		i.reports <- report
+		channel <- report
 		return
 	}
 
 	measuresID, err := i.influx.InsertMeasures(experiment.ID, measures)
 	if i.handleError(err, &report, entity.ReportStepInsertMeasures) {
-		i.reports <- report
+		channel <- report
 		return
 	}
 
@@ -102,12 +99,12 @@ func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Ex
 			report.Status = entity.ReportStatusSuccess
 			report.Progress = 100
 		}
-		i.reports <- report
+		channel <- report
 	})
 }
 
 // ImportAlarms will import the alarms
-func (i *ImportService) ImportAlarms(report entity.Report, experiment entity.Experiment) {
+func (i *ImportService) ImportAlarms(report entity.Report, experiment entity.Experiment, channel chan entity.Report) {
 	if i.alarmsParser == nil {
 		return
 	}
@@ -115,18 +112,18 @@ func (i *ImportService) ImportAlarms(report entity.Report, experiment entity.Exp
 	report.Title = "Alarms"
 	alarms, size, err := i.alarmsParser.ParseAlarms()
 	if i.handleError(err, &report, entity.ReportStepParseAlarms) {
-		i.reports <- report
+		channel <- report
 		return
 	}
 
 	report.Progress = i.addSize(size)
 	err = i.influx.InsertAlarms(experiment.ID, experiment.StartDate, alarms)
 	if i.handleError(err, &report, entity.ReportStepInsertAlarms) {
-		i.reports <- report
+		channel <- report
 		return
 	}
 
-	i.reports <- report
+	channel <- report
 }
 
 func (i *ImportService) addSize(size int) int {
