@@ -119,8 +119,9 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 
+	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
 		return
@@ -135,7 +136,6 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	for {
 		select {
