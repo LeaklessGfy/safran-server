@@ -14,7 +14,7 @@ const (
 	ReportStepInitImport = "5_INIT_IMPORT"
 
 	ReportStepParseHeader      = "6_PARSE_HEADER"
-	ReportStepParseDate        = "7_ARSE_DATE"
+	ReportStepParseDate        = "7_PARSE_DATE"
 	ReportStepInsertExperiment = "8_INSERT_EXPERIMENT"
 
 	ReportStepParseMeasures  = "9.1.1_PARSE_MEASURES"
@@ -23,8 +23,8 @@ const (
 	ReportStepParseSamples  = "9.1.3_PARSE_SAMPLES"
 	ReportStepInsertSamples = "9.1.4_INSERT_SAMPLES"
 
-	ReportStepParseAlarms  = "9.1.1_PARSE_ALARMS"
-	ReportStepInsertAlarms = "9.1.2_INSERT_ALARMS"
+	ReportStepParseAlarms  = "9.2.1_PARSE_ALARMS"
+	ReportStepInsertAlarms = "9.2.2_INSERT_ALARMS"
 
 	ReportStepRemoveExperiment = "X_REMOVE_EXPERIMENT"
 )
@@ -39,6 +39,7 @@ type Report struct {
 	Progress     int               `json:"progress"`
 	Errors       map[string]string `json:"errors"`
 	Steps        map[string]bool   `json:"steps"`
+	Current      string            `json:"currentStep"`
 }
 
 func NewReport(channel, title string) *Report {
@@ -55,12 +56,14 @@ func NewReport(channel, title string) *Report {
 		Progress:     0,
 		Errors:       errors,
 		Steps:        steps,
+		Current:      ReportStepInit,
 	}
 }
 
 func (r *Report) AddSuccess(step string) *Report {
 	r.ID++
 	r.Steps[step] = true
+	r.Current = step
 	return r
 }
 
@@ -69,6 +72,7 @@ func (r *Report) AddError(step string, err error) *Report {
 	r.Status = ReportStatusFailure
 	r.Steps[step] = false
 	r.Errors[step] = err.Error()
+	r.Current = step
 	return r
 }
 

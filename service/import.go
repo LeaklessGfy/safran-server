@@ -4,6 +4,7 @@ import (
 	"io"
 	"sync"
 
+	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/leaklessgfy/safran-server/entity"
 	"github.com/leaklessgfy/safran-server/utils"
 
@@ -75,7 +76,7 @@ func (i *ImportService) ImportExperiment(report *entity.Report, experiment *enti
 }
 
 // ImportSamples will import measures and samples
-func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Experiment, channel chan entity.Report) {
+func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Experiment, channel chan entity.Report, save chan client.BatchPoints) {
 	report.Title = "Measure"
 	measures, sizeMeasures, err := i.samplesParser.ParseMeasures()
 	report.Progress = i.addSize(sizeMeasures)
@@ -92,12 +93,15 @@ func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Ex
 
 	i.samplesParser.ParseSamples(len(measuresID), func(samples []*entity.Sample, size int, end bool) {
 		report.Progress = i.addSize(size)
-		err := i.influx.InsertSamples(experiment.ID, measuresID, experiment.StartDate, samples)
+		batchPoints, err := i.influx.InsertSamples(experiment.ID, measuresID, experiment.StartDate, samples)
 		if err != nil {
 			report.AddError(entity.ReportStepInsertSamples, err)
 		} else if len(report.Errors) < 1 && end {
+			report.AddSuccess(entity.ReportStepInsertSamples)
 			report.Status = entity.ReportStatusSuccess
 			report.Progress = 100
+		} else {
+			save <- batchPoints
 		}
 		channel <- report
 	})

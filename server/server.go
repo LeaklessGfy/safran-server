@@ -111,9 +111,12 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.imports[channel.String()] = make(chan entity.Report, 10)
-	go importService.ImportSamples(*report, *experiment, s.imports[channel.String()])
-	go importService.ImportAlarms(*report, *experiment, s.imports[channel.String()])
+	reports := make(chan entity.Report, 10)
+	s.imports[channel.String()] = reports
+
+	go s.influx.InitChannel(*report, reports)
+	go importService.ImportSamples(*report, *experiment, reports, s.influx.Channel)
+	go importService.ImportAlarms(*report, *experiment, reports)
 
 	jsonR.Encode(report)
 }

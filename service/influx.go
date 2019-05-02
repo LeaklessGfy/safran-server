@@ -12,7 +12,8 @@ import (
 
 // InfluxService is an higher abstraction layer between safran entities and influx db
 type InfluxService struct {
-	c client.Client
+	c       client.Client
+	Channel chan client.BatchPoints
 }
 
 // NewInfluxService create a new InfluxService
@@ -25,7 +26,7 @@ func NewInfluxService() (*InfluxService, error) {
 	}
 	defer c.Close()
 
-	influx := &InfluxService{c}
+	influx := &InfluxService{c, make(chan client.BatchPoints, 20)}
 
 	return influx, influx.Ping()
 }
@@ -36,6 +37,19 @@ func (i InfluxService) Ping() error {
 		return err
 	}
 	return i.Install()
+}
+
+func (i *InfluxService) InitChannel(report entity.Report, reports chan entity.Report) {
+	for {
+		select {
+		case batchPoints := <-i.Channel:
+			err := i.c.Write(batchPoints)
+			if err != nil {
+				report.AddError(entity.ReportStepInsertSamples, err)
+				reports <- report
+			}
+		}
+	}
 }
 
 // InsertExperiment will insert an experiment into influx db
@@ -76,20 +90,20 @@ func (i InfluxService) InsertMeasures(experimentID string, measures []*entity.Me
 }
 
 // InsertSamples will insert a bunch of samples into influx db
-func (i InfluxService) InsertSamples(experimentID string, measuresID []string, experimentDate time.Time, samples []*entity.Sample) error {
+func (i InfluxService) InsertSamples(experimentID string, measuresID []string, experimentDate time.Time, samples []*entity.Sample) (client.BatchPoints, error) {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
-		return err
+		return batchPoints, err
 	}
 	for _, sample := range samples {
 		measureID := measuresID[sample.Measure]
 		point, err := buildSamplePoint(experimentID, measureID, experimentDate, sample)
 		if err != nil {
-			return err
+			return batchPoints, err
 		}
 		batchPoints.AddPoint(point)
 	}
-	return i.c.Write(batchPoints)
+	return batchPoints, nil
 }
 
 // InsertAlarms will insert a bunch of alarms into influx db
