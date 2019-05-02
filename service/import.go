@@ -100,7 +100,9 @@ func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Ex
 			report.AddSuccess(entity.ReportStepInsertSamples)
 			report.Status = entity.ReportStatusSuccess
 			report.Progress = 100
+			save <- batchPoints
 		} else {
+			report.Step()
 			save <- batchPoints
 		}
 		channel <- report

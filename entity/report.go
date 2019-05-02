@@ -76,6 +76,10 @@ func (r *Report) AddError(step string, err error) *Report {
 	return r
 }
 
+func (r *Report) Step() {
+	r.ID++
+}
+
 func (r Report) HasError() bool {
 	return len(r.Errors) > 0
 }
