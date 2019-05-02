@@ -2,9 +2,7 @@ package service
 
 import (
 	"io"
-	"sync"
 
-	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/leaklessgfy/safran-server/entity"
 	"github.com/leaklessgfy/safran-server/utils"
 
@@ -18,8 +16,6 @@ type ImportService struct {
 	alarmsParser  *parser.AlarmsParser
 	samplesSize   int64
 	alarmsSize    int64
-	readSize      int64
-	lock          sync.Mutex
 }
 
 // NewImportService create the import service
@@ -50,7 +46,7 @@ func NewImportService(
 // ImportExperiment will import the experiment
 func (i *ImportService) ImportExperiment(report *entity.Report, experiment *entity.Experiment) error {
 	header, sizeHeader, err := i.samplesParser.ParseHeader()
-	report.Progress = i.addSize(sizeHeader)
+	report.ReadSamples(sizeHeader)
 	if i.handleError(err, report, entity.ReportStepParseHeader) {
 		return err
 	}
@@ -76,10 +72,11 @@ func (i *ImportService) ImportExperiment(report *entity.Report, experiment *enti
 }
 
 // ImportSamples will import measures and samples
-func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Experiment, channel chan entity.Report, save chan client.BatchPoints) {
-	report.Title = "Measure"
+func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Experiment, channel chan entity.Report, save chan ChannelRequest) {
+	report.Title = "Measures"
 	measures, sizeMeasures, err := i.samplesParser.ParseMeasures()
-	report.Progress = i.addSize(sizeMeasures)
+	report.ReadSamples(sizeMeasures)
+
 	if i.handleError(err, &report, entity.ReportStepParseMeasures) {
 		channel <- report
 		return
@@ -92,18 +89,21 @@ func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Ex
 	}
 
 	i.samplesParser.ParseSamples(len(measuresID), func(samples []*entity.Sample, size int, end bool) {
-		report.Progress = i.addSize(size)
+		report.ReadSamples(size)
+		if report.HasError() {
+			return
+		}
 		batchPoints, err := i.influx.InsertSamples(experiment.ID, measuresID, experiment.StartDate, samples)
 		if err != nil {
 			report.AddError(entity.ReportStepInsertSamples, err)
-		} else if len(report.Errors) < 1 && end {
+		} else if !report.HasError() && end {
 			report.AddSuccess(entity.ReportStepInsertSamples)
 			report.Status = entity.ReportStatusSuccess
 			report.Progress = 100
-			save <- batchPoints
+			save <- ChannelRequest{report, batchPoints}
 		} else {
 			report.Step()
-			save <- batchPoints
+			save <- ChannelRequest{report, batchPoints}
 		}
 		channel <- report
 	})
@@ -122,21 +122,17 @@ func (i *ImportService) ImportAlarms(report entity.Report, experiment entity.Exp
 		return
 	}
 
-	report.Progress = i.addSize(size)
+	report.ReadAlarms(size)
 	err = i.influx.InsertAlarms(experiment.ID, experiment.StartDate, alarms)
 	if i.handleError(err, &report, entity.ReportStepInsertAlarms) {
 		channel <- report
 		return
 	}
 
-	channel <- report
-}
+	report.Status = entity.ReportStatusSuccess
+	report.Progress = 100
 
-func (i *ImportService) addSize(size int) int {
-	i.lock.Lock()
-	defer i.lock.Unlock()
-	i.readSize += int64(size)
-	return int((i.readSize * 100) / (i.samplesSize + i.alarmsSize))
+	channel <- report
 }
 
 func (i *ImportService) handleError(err error, report *entity.Report, step string) bool {

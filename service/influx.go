@@ -13,7 +13,12 @@ import (
 // InfluxService is an higher abstraction layer between safran entities and influx db
 type InfluxService struct {
 	c       client.Client
-	Channel chan client.BatchPoints
+	Channel chan ChannelRequest
+}
+
+type ChannelRequest struct {
+	report      entity.Report
+	batchPoints client.BatchPoints
 }
 
 // NewInfluxService create a new InfluxService
@@ -26,7 +31,7 @@ func NewInfluxService() (*InfluxService, error) {
 	}
 	defer c.Close()
 
-	influx := &InfluxService{c, make(chan client.BatchPoints, 20)}
+	influx := &InfluxService{c, make(chan ChannelRequest, 20)}
 
 	return influx, influx.Ping()
 }
@@ -39,14 +44,18 @@ func (i InfluxService) Ping() error {
 	return i.Install()
 }
 
-func (i *InfluxService) InitChannel(report entity.Report, reports chan entity.Report) {
+func (i *InfluxService) InitChannel(reports chan entity.Report) {
 	for {
 		select {
-		case batchPoints := <-i.Channel:
-			err := i.c.Write(batchPoints)
+		case request := <-i.Channel:
+			if request.report.HasError() {
+				i.RemoveExperiment(request.report.ExperimentID)
+				return
+			}
+			err := i.c.Write(request.batchPoints)
 			if err != nil {
-				report.AddError(entity.ReportStepInsertSamples, err)
-				reports <- report
+				request.report.AddError(entity.ReportStepInsertSamples, err)
+				reports <- request.report
 			}
 		}
 	}

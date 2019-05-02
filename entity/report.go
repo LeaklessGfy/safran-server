@@ -37,6 +37,10 @@ type Report struct {
 	ExperimentID string            `json:"experimentID"`
 	HasAlarms    bool              `json:"hasAlarms"`
 	Progress     int               `json:"progress"`
+	SamplesSize  int64             `json:"samplesSize"`
+	AlarmsSize   int64             `json:"alarmsSize"`
+	SamplesRead  int64             `json:"samplesRead"`
+	AlarmsRead   int64             `json:"alarmsRead"`
 	Errors       map[string]string `json:"errors"`
 	Steps        map[string]bool   `json:"steps"`
 	Current      string            `json:"currentStep"`
@@ -78,6 +82,16 @@ func (r *Report) AddError(step string, err error) *Report {
 
 func (r *Report) Step() {
 	r.ID++
+}
+
+func (r *Report) ReadSamples(size int) {
+	r.SamplesRead += int64(size)
+	r.Progress = int((r.SamplesRead * 100) / r.SamplesSize)
+}
+
+func (r *Report) ReadAlarms(size int) {
+	r.AlarmsRead += int64(size)
+	r.Progress = int((r.AlarmsRead * 100) / r.AlarmsSize)
 }
 
 func (r Report) HasError() bool {

@@ -15,7 +15,12 @@ import (
 // Server is an abstraction layer for http server
 type Server struct {
 	influx  *service.InfluxService
-	imports map[string]chan entity.Report
+	imports map[string]Channel
+}
+
+type Channel struct {
+	samples chan entity.Report
+	alarms  chan entity.Report
 }
 
 // NewServer create a server instance
@@ -25,8 +30,8 @@ func NewServer() (*Server, error) {
 		return nil, err
 	}
 
-	imports := make(map[string]chan entity.Report)
-	imports["TEST"] = make(chan entity.Report, 10)
+	imports := make(map[string]Channel)
+	imports["TEST"] = Channel{samples: make(chan entity.Report, 5)}
 
 	return &Server{
 		influx:  influx,
@@ -49,7 +54,7 @@ func (s Server) Start() error {
 func (s Server) simpleHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	select {
-	case s.imports["TEST"] <- *entity.NewReport("TEST", "Test"):
+	case s.imports["TEST"].samples <- *entity.NewReport("TEST", "Test"):
 		w.WriteHeader(200)
 	default:
 		http.Error(w, "no consumer", http.StatusNotFound)
@@ -83,6 +88,7 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		jsonR.Encode(report.AddError(entity.ReportStepExtractSamples, err))
 		return
 	}
+	report.SamplesSize = samplesSize
 	report.AddSuccess(entity.ReportStepExtractSamples)
 	defer samplesFile.Close()
 
@@ -93,6 +99,7 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if alarmsFile != nil {
 		report.HasAlarms = true
+		report.AlarmsSize = alarmsSize
 		report.AddSuccess(entity.ReportStepExtractAlarms)
 		defer alarmsFile.Close()
 	}
@@ -111,12 +118,13 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reports := make(chan entity.Report, 10)
-	s.imports[channel.String()] = reports
+	samples := make(chan entity.Report, 50)
+	alarms := make(chan entity.Report, 10)
+	s.imports[channel.String()] = Channel{samples, alarms}
 
-	go s.influx.InitChannel(*report, reports)
-	go importService.ImportSamples(*report, *experiment, reports, s.influx.Channel)
-	go importService.ImportAlarms(*report, *experiment, reports)
+	go s.influx.InitChannel(samples)
+	go importService.ImportSamples(*report, *experiment, samples, s.influx.Channel)
+	go importService.ImportAlarms(*report, *experiment, alarms)
 
 	jsonR.Encode(report)
 }
@@ -144,7 +152,7 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case report := <-s.imports[channel]:
+		case report := <-s.imports[channel].samples:
 			b, err := json.Marshal(report)
 
 			if err != nil {
@@ -156,7 +164,23 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 
 			if report.HasComplete() {
-				close(s.imports[channel])
+				close(s.imports[channel].samples)
+				delete(s.imports, channel)
+				return
+			}
+		case report := <-s.imports[channel].alarms:
+			b, err := json.Marshal(report)
+
+			if err != nil {
+				log.Fatal("Can't convert to JSON")
+			}
+
+			fmt.Fprintf(w, "id: %d\n", report.ID)
+			fmt.Fprintf(w, "data: %s\n\n", b)
+			flusher.Flush()
+
+			if report.HasComplete() {
+				close(s.imports[channel].alarms)
 				delete(s.imports, channel)
 				return
 			}

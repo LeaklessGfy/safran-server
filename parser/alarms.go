@@ -25,10 +25,10 @@ func (p AlarmsParser) ParseAlarms() ([]*entity.Alarm, int, error) {
 	fullSize := 0
 	for p.scanner.Scan() {
 		line := p.scanner.Text()
+		fullSize += len([]byte(line))
 		if len(line) < 1 {
 			return alarms, fullSize, nil
 		}
-		fullSize += len([]byte(line))
 		arr := strings.Split(line, separator)
 		if len(arr) < 3 {
 			return alarms, fullSize, errors.New("Badly formatted alarm line")
