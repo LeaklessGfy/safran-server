@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"io"
 	"sync"
 
@@ -53,62 +52,54 @@ func NewImportService(
 // ImportExperiment will import the experiment
 func (i *ImportService) ImportExperiment(report *entity.Report, experiment *entity.Experiment) error {
 	header, sizeHeader, err := i.samplesParser.ParseHeader()
-	if err != nil {
-		return errors.New("Parse Header - " + err.Error())
-	}
-	experiment.StartDate, err = utils.ParseDate(header.StartDate)
-	if err != nil {
-		return errors.New("Parse Experiment StartDate - " + err.Error())
-	}
-	experiment.EndDate, err = utils.ParseDate(header.EndDate)
-	if err != nil {
-		return errors.New("Parse Experiment EndDate - " + err.Error())
-	}
-	experiment.ID, err = i.influx.InsertExperiment(*experiment)
-	if err != nil {
-		i.influx.RemoveExperiment(experiment.ID)
-		return errors.New("Insert Experiment - " + err.Error())
+	report.Progress = i.addSize(sizeHeader)
+	if i.handleError(err, report, entity.ReportStepParseHeader) {
+		return err
 	}
 
+	experiment.StartDate, err = utils.ParseDate(header.StartDate)
+	if i.handleError(err, report, entity.ReportStepParseDate) {
+		return err
+	}
+
+	experiment.EndDate, err = utils.ParseDate(header.EndDate)
+	if i.handleError(err, report, entity.ReportStepParseDate) {
+		return err
+	}
+
+	experiment.ID, err = i.influx.InsertExperiment(*experiment)
 	report.ExperimentID = experiment.ID
-	report.Progress = i.addSize(sizeHeader)
+	if i.handleError(err, report, entity.ReportStepInsertExperiment) {
+		i.influx.RemoveExperiment(experiment.ID)
+		return err
+	}
 
 	return nil
 }
 
-func (i ImportService) ImportSamples(report entity.Report, experiment entity.Experiment) {
+// ImportSamples will import measures and samples
+func (i *ImportService) ImportSamples(report entity.Report, experiment entity.Experiment) {
+	report.Title = "Measure"
 	measures, sizeMeasures, err := i.samplesParser.ParseMeasures()
 	report.Progress = i.addSize(sizeMeasures)
-
-	if err != nil {
-		report.AddError(err)
-		if errRemove := i.influx.RemoveExperiment(experiment.ID); errRemove != nil {
-			report.AddError(errRemove)
-		}
+	if i.handleError(err, &report, entity.ReportStepParseMeasures) {
 		i.reports <- report
 		return
 	}
 
 	measuresID, err := i.influx.InsertMeasures(experiment.ID, measures)
-	if err != nil {
-		report.AddError(err)
-		if errRemove := i.influx.RemoveExperiment(experiment.ID); errRemove != nil {
-			report.AddError(errRemove)
-		}
+	if i.handleError(err, &report, entity.ReportStepInsertMeasures) {
 		i.reports <- report
 		return
 	}
 
 	i.samplesParser.ParseSamples(len(measuresID), func(samples []*entity.Sample, size int, end bool) {
 		report.Progress = i.addSize(size)
-
 		err := i.influx.InsertSamples(experiment.ID, measuresID, experiment.StartDate, samples)
 		if err != nil {
-			//i.influx.RemoveExperiment(experimentID)
-			report.AddError(err)
-		}
-		if len(report.Errors) < 1 && end {
-			report.Status = entity.StatusSuccess
+			report.AddError(entity.ReportStepInsertSamples, err)
+		} else if len(report.Errors) < 1 && end {
+			report.Status = entity.ReportStatusSuccess
 			report.Progress = 100
 		}
 		i.reports <- report
@@ -121,24 +112,16 @@ func (i *ImportService) ImportAlarms(report entity.Report, experiment entity.Exp
 		return
 	}
 
+	report.Title = "Alarms"
 	alarms, size, err := i.alarmsParser.ParseAlarms()
-	report.Progress = i.addSize(size)
-
-	if err != nil {
-		report.AddError(err)
-		if errRemove := i.influx.RemoveExperiment(experiment.ID); errRemove != nil {
-			report.AddError(errRemove)
-		}
+	if i.handleError(err, &report, entity.ReportStepParseAlarms) {
 		i.reports <- report
 		return
 	}
 
+	report.Progress = i.addSize(size)
 	err = i.influx.InsertAlarms(experiment.ID, experiment.StartDate, alarms)
-	if err != nil {
-		report.AddError(err)
-		if errRemove := i.influx.RemoveExperiment(experiment.ID); errRemove != nil {
-			report.AddError(errRemove)
-		}
+	if i.handleError(err, &report, entity.ReportStepInsertAlarms) {
 		i.reports <- report
 		return
 	}
@@ -151,4 +134,22 @@ func (i *ImportService) addSize(size int) int {
 	defer i.lock.Unlock()
 	i.readSize += int64(size)
 	return int((i.readSize * 100) / (i.samplesSize + i.alarmsSize))
+}
+
+func (i *ImportService) handleError(err error, report *entity.Report, step string) bool {
+	if err == nil {
+		report.AddSuccess(step)
+		return false
+	}
+
+	report.AddError(step, err)
+	if report.ExperimentID != "" {
+		if errRemove := i.influx.RemoveExperiment(report.ExperimentID); errRemove != nil {
+			report.AddError(entity.ReportStepRemoveExperiment, errRemove)
+		} else {
+			report.AddSuccess(entity.ReportStepRemoveExperiment)
+		}
+	}
+
+	return true
 }

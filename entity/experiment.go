@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Experiment is the experiment
 type Experiment struct {
 	ID        string
 	Reference string
@@ -15,6 +16,7 @@ type Experiment struct {
 	EndDate   time.Time
 }
 
+// Validate check if current experiement is valide
 func (e Experiment) Validate() error {
 	if e.Reference == "" {
 		return errors.New("experiment reference should not be null")

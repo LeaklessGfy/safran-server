@@ -1,7 +1,8 @@
 package entity
 
+// Sample is a timeserie data
 type Sample struct {
-	Value   string
 	Time    string
+	Value   string
 	Measure int
 }

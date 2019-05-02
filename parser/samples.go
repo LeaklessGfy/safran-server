@@ -72,8 +72,7 @@ func (p SamplesParser) ParseSamples(size int, executor func([]*entity.Sample, in
 				return
 			}
 			line := p.scanner.Text()
-			b := []byte(line)
-			size += len(b)
+			size += len([]byte(line))
 			arr := strings.Split(line, separator)
 			for i := 2; i < len(arr); i++ {
 				if len(arr[i]) > 0 && arr[i] != nan && i < size {

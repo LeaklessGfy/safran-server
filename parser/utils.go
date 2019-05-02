@@ -14,8 +14,6 @@ func parseLine(s *bufio.Scanner, skip int, limit int) ([]string, int, error) {
 	if len(line) < 1 {
 		return []string{}, 0, errors.New("Empty content")
 	}
-	b := []byte("ABC€")
-	size := len(b)
 	tmp := strings.Split(line, separator)
 	lgt := skip + limit
 	if len(tmp) < skip || len(tmp) < lgt {
@@ -24,5 +22,5 @@ func parseLine(s *bufio.Scanner, skip int, limit int) ([]string, int, error) {
 	if limit < 1 {
 		lgt = len(tmp)
 	}
-	return tmp[skip:lgt], size, nil
+	return tmp[skip:lgt], len([]byte(line)), nil
 }
