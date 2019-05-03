@@ -19,8 +19,7 @@ type Server struct {
 }
 
 type Channel struct {
-	samples chan entity.Report
-	alarms  chan entity.Report
+	channel chan entity.Report
 }
 
 // NewServer create a server instance
@@ -31,7 +30,7 @@ func NewServer() (*Server, error) {
 	}
 
 	imports := make(map[string]Channel)
-	imports["TEST"] = Channel{samples: make(chan entity.Report, 5)}
+	imports["TEST"] = Channel{channel: make(chan entity.Report, 2)}
 
 	return &Server{
 		influx:  influx,
@@ -54,7 +53,7 @@ func (s Server) Start() error {
 func (s Server) simpleHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	select {
-	case s.imports["TEST"].samples <- *entity.NewReport("TEST", "Test"):
+	case s.imports["TEST"].channel <- *entity.NewReport("TEST"):
 		w.WriteHeader(200)
 	default:
 		http.Error(w, "no consumer", http.StatusNotFound)
@@ -72,7 +71,7 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonR := json.NewEncoder(w)
-	report := entity.NewReport(channel.String(), "Experiment")
+	report := entity.NewReport(channel.String())
 
 	// EXPERIMENT
 	experiment, err := service.ExtractExperiment(r)
@@ -105,7 +104,7 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// IMPORT
-	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile, samplesSize, alarmsSize)
+	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile)
 	if err != nil {
 		jsonR.Encode(report.AddError(entity.ReportStepInitImport, err))
 		return
@@ -118,13 +117,12 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	samples := make(chan entity.Report, 50)
-	alarms := make(chan entity.Report, 10)
-	s.imports[channel.String()] = Channel{samples, alarms}
+	c := make(chan entity.Report, 50)
+	s.imports[channel.String()] = Channel{channel: c}
 
-	go s.influx.InitChannel(samples)
-	go importService.ImportSamples(*report, *experiment, samples, s.influx.Channel)
-	go importService.ImportAlarms(*report, *experiment, alarms)
+	go importService.ImportSamples(*report.Copy(entity.ReportTypeSamples), *experiment, c)
+	go importService.ImportAlarms(*report.Copy(entity.ReportTypeAlarms), *experiment, c)
+	go importService.Save(*report.Copy(entity.ReportTypeClient), c)
 
 	jsonR.Encode(report)
 }
@@ -148,41 +146,26 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
+	c := s.imports[channel]
+
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case report := <-s.imports[channel].samples:
-			b, err := json.Marshal(report)
-
-			if err != nil {
-				log.Fatal("Can't convert to JSON")
-			}
-
+		case report := <-c.channel:
+			json := report.ToJSON()
 			fmt.Fprintf(w, "id: %d\n", report.ID)
-			fmt.Fprintf(w, "data: %s\n\n", b)
+			fmt.Fprintf(w, "event: %s\n", report.Type)
+			fmt.Fprintf(w, "data: %s\n\n\n", json)
+			fmt.Println(report)
 			flusher.Flush()
 
 			if report.HasComplete() {
-				close(s.imports[channel].samples)
-				delete(s.imports, channel)
-				return
-			}
-		case report := <-s.imports[channel].alarms:
-			b, err := json.Marshal(report)
-
-			if err != nil {
-				log.Fatal("Can't convert to JSON")
-			}
-
-			fmt.Fprintf(w, "id: %d\n", report.ID)
-			fmt.Fprintf(w, "data: %s\n\n", b)
-			flusher.Flush()
-
-			if report.HasComplete() {
-				close(s.imports[channel].alarms)
-				delete(s.imports, channel)
-				return
+				if report.Type == entity.ReportTypeClient {
+					close(c.channel)
+					delete(s.imports, channel)
+					return
+				}
 			}
 		}
 	}

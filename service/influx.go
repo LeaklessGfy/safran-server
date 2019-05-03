@@ -12,13 +12,7 @@ import (
 
 // InfluxService is an higher abstraction layer between safran entities and influx db
 type InfluxService struct {
-	c       client.Client
-	Channel chan ChannelRequest
-}
-
-type ChannelRequest struct {
-	report      entity.Report
-	batchPoints client.BatchPoints
+	c client.Client
 }
 
 // NewInfluxService create a new InfluxService
@@ -31,7 +25,7 @@ func NewInfluxService() (*InfluxService, error) {
 	}
 	defer c.Close()
 
-	influx := &InfluxService{c, make(chan ChannelRequest, 20)}
+	influx := &InfluxService{c}
 
 	return influx, influx.Ping()
 }
@@ -42,23 +36,6 @@ func (i InfluxService) Ping() error {
 		return err
 	}
 	return i.Install()
-}
-
-func (i *InfluxService) InitChannel(reports chan entity.Report) {
-	for {
-		select {
-		case request := <-i.Channel:
-			if request.report.HasError() {
-				i.RemoveExperiment(request.report.ExperimentID)
-				return
-			}
-			err := i.c.Write(request.batchPoints)
-			if err != nil {
-				request.report.AddError(entity.ReportStepInsertSamples, err)
-				reports <- request.report
-			}
-		}
-	}
 }
 
 // InsertExperiment will insert an experiment into influx db
@@ -98,8 +75,8 @@ func (i InfluxService) InsertMeasures(experimentID string, measures []*entity.Me
 	return measuresID, err
 }
 
-// InsertSamples will insert a bunch of samples into influx db
-func (i InfluxService) InsertSamples(experimentID string, measuresID []string, experimentDate time.Time, samples []*entity.Sample) (client.BatchPoints, error) {
+// PrepareSamples will create batch points for samples
+func (i InfluxService) PrepareSamples(experimentID string, measuresID []string, experimentDate time.Time, samples []*entity.Sample) (client.BatchPoints, error) {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return batchPoints, err
@@ -115,20 +92,20 @@ func (i InfluxService) InsertSamples(experimentID string, measuresID []string, e
 	return batchPoints, nil
 }
 
-// InsertAlarms will insert a bunch of alarms into influx db
-func (i InfluxService) InsertAlarms(experimentID string, experimentDate time.Time, alarms []*entity.Alarm) error {
+// PrepareAlarms will create batch points for alarms
+func (i InfluxService) PrepareAlarms(experimentID string, experimentDate time.Time, alarms []*entity.Alarm) (client.BatchPoints, error) {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
-		return err
+		return batchPoints, err
 	}
 	for _, alarm := range alarms {
 		point, err := buildAlarmPoint(experimentID, experimentDate, alarm)
 		if err != nil {
-			return err
+			return batchPoints, err
 		}
 		batchPoints.AddPoint(point)
 	}
-	return i.c.Write(batchPoints)
+	return batchPoints, nil
 }
 
 // RemoveExperiment will remove the specified experiment into influx db
@@ -156,6 +133,10 @@ func (i InfluxService) RemoveExperiment(experimentID string) error {
 	}
 
 	return nil
+}
+
+func (i InfluxService) InsertBatchPoints(batchPoints client.BatchPoints) error {
+	return i.c.Write(batchPoints)
 }
 
 func (i InfluxService) Install() error {

@@ -62,26 +62,27 @@ func (p SamplesParser) ParseMeasures() ([]*entity.Measure, int, error) {
 }
 
 // ParseSamples parse the samples of the file
-func (p SamplesParser) ParseSamples(size int, executor func([]*entity.Sample, int, bool)) {
-	for true {
-		var samples []*entity.Sample
-		var size int
-		for n := 0; n < 500; n++ {
-			if !p.scanner.Scan() {
-				executor(samples, size, true)
-				return
-			}
-			line := p.scanner.Text()
-			size += len([]byte(line))
-			arr := strings.Split(line, separator)
-			for i := 2; i < len(arr); i++ {
-				if len(arr[i]) > 0 && arr[i] != nan && i < size {
-					samples = append(samples, &entity.Sample{Value: arr[i], Time: arr[1], Measure: i - offset})
-				}
+func (p SamplesParser) ParseSamples(limit int, measuresLength int) ([]*entity.Sample, int, bool) {
+	var samples []*entity.Sample
+	var size int
+
+	for n := 0; n < limit; n++ {
+		if !p.scanner.Scan() {
+			return samples, size, true
+		}
+
+		line := p.scanner.Text()
+		size += len([]byte(line))
+		arr := strings.Split(line, separator)
+
+		for i := 2; i < len(arr); i++ {
+			if len(arr[i]) > 0 && arr[i] != nan && i < measuresLength {
+				samples = append(samples, &entity.Sample{Value: arr[i], Time: arr[1], Measure: i - offset})
 			}
 		}
-		executor(samples, size, false)
 	}
+
+	return samples, size, false
 }
 
 func (p SamplesParser) parseDate() (string, int, error) {

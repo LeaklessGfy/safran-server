@@ -1,8 +1,19 @@
 package entity
 
-const ReportStatusFailure = "failure"
-const ReportStatusSuccess = "success"
-const ReportStatusPending = "pending"
+import "encoding/json"
+
+const (
+	ReportTypeExperiment = "Experiment"
+	ReportTypeSamples    = "Samples"
+	ReportTypeAlarms     = "Alarms"
+	ReportTypeClient     = "Client"
+)
+
+const (
+	ReportStatusFailure  = "failure"
+	ReportStatusSuccess  = "success"
+	ReportStatusProgress = "progress"
+)
 
 const (
 	ReportStepInit = "1_INIT"
@@ -17,81 +28,106 @@ const (
 	ReportStepParseDate        = "7_PARSE_DATE"
 	ReportStepInsertExperiment = "8_INSERT_EXPERIMENT"
 
-	ReportStepParseMeasures  = "9.1.1_PARSE_MEASURES"
-	ReportStepInsertMeasures = "9.1.2_INSERT_MEASURES"
+	ReportStepParseMeasures  = "1_PARSE_MEASURES"
+	ReportStepInsertMeasures = "2_INSERT_MEASURES"
+	ReportStepParseSamples   = "3_PARSE_SAMPLES"
+	ReportStepPrepareSamples = "4_PREPARE_SAMPLES_"
+	ReportStepInsertSamples  = "5_INSERT_SAMPLES_"
 
-	ReportStepParseSamples  = "9.1.3_PARSE_SAMPLES"
-	ReportStepInsertSamples = "9.1.4_INSERT_SAMPLES"
+	ReportStepParseAlarms   = "1_PARSE_ALARMS"
+	ReportStepPrepareAlarms = "2_PREPARE_ALARMS_"
+	ReportStepInsertAlarms  = "3_INSERT_ALARMS_"
 
-	ReportStepParseAlarms  = "9.2.1_PARSE_ALARMS"
-	ReportStepInsertAlarms = "9.2.2_INSERT_ALARMS"
-
+	ReportStepInsertPoints     = "Y_INSERT_POINTS"
 	ReportStepRemoveExperiment = "X_REMOVE_EXPERIMENT"
 )
 
 type Report struct {
 	ID           int               `json:"id"`
 	Channel      string            `json:"channel"`
-	Title        string            `json:"title"`
+	Type         string            `json:"type"`
 	Status       string            `json:"status"`
 	ExperimentID string            `json:"experimentID"`
 	HasAlarms    bool              `json:"hasAlarms"`
 	Progress     int               `json:"progress"`
 	SamplesSize  int64             `json:"samplesSize"`
 	AlarmsSize   int64             `json:"alarmsSize"`
-	SamplesRead  int64             `json:"samplesRead"`
-	AlarmsRead   int64             `json:"alarmsRead"`
+	Read         int64             `json:"read"`
 	Errors       map[string]string `json:"errors"`
 	Steps        map[string]bool   `json:"steps"`
 	Current      string            `json:"currentStep"`
 }
 
-func NewReport(channel, title string) *Report {
+func NewReport(channel string) *Report {
+	errors := make(map[string]string)
 	steps := make(map[string]bool)
 	steps[ReportStepInit] = true
-	errors := make(map[string]string)
+
 	return &Report{
-		ID:           0,
+		ID:           1,
 		Channel:      channel,
-		Title:        title,
-		Status:       ReportStatusPending,
+		Type:         ReportTypeExperiment,
+		Status:       ReportStatusProgress,
 		ExperimentID: "",
 		HasAlarms:    false,
 		Progress:     0,
+		SamplesSize:  0,
+		AlarmsSize:   0,
 		Errors:       errors,
 		Steps:        steps,
 		Current:      ReportStepInit,
 	}
 }
 
+func (r Report) Copy(t string) *Report {
+	errors := make(map[string]string)
+	steps := make(map[string]bool)
+
+	return &Report{
+		ID:           1,
+		Channel:      r.Channel,
+		Type:         t,
+		Status:       r.Status,
+		ExperimentID: r.ExperimentID,
+		HasAlarms:    r.HasAlarms,
+		Progress:     r.Progress,
+		SamplesSize:  r.SamplesSize,
+		AlarmsSize:   r.AlarmsSize,
+		Read:         0,
+		Errors:       errors,
+		Steps:        steps,
+		Current:      r.Current,
+	}
+}
+
 func (r *Report) AddSuccess(step string) *Report {
-	r.ID++
-	r.Steps[step] = true
 	r.Current = step
+	r.Steps[step] = true
 	return r
 }
 
 func (r *Report) AddError(step string, err error) *Report {
-	r.ID++
+	r.Current = step
 	r.Status = ReportStatusFailure
 	r.Steps[step] = false
 	r.Errors[step] = err.Error()
-	r.Current = step
 	return r
 }
 
-func (r *Report) Step() {
+func (r *Report) Step() *Report {
 	r.ID++
+	return r
 }
 
-func (r *Report) ReadSamples(size int) {
-	r.SamplesRead += int64(size)
-	r.Progress = int((r.SamplesRead * 100) / r.SamplesSize)
+func (r *Report) AddRead(size int) *Report {
+	r.Read += int64(size)
+	r.Progress = int((r.Read * 100) / r.SamplesSize)
+	return r
 }
 
-func (r *Report) ReadAlarms(size int) {
-	r.AlarmsRead += int64(size)
-	r.Progress = int((r.AlarmsRead * 100) / r.AlarmsSize)
+func (r *Report) End() {
+	r.Status = ReportStatusSuccess
+	r.Progress = 100
 }
 
 func (r Report) HasError() bool {
@@ -99,5 +135,13 @@ func (r Report) HasError() bool {
 }
 
 func (r Report) HasComplete() bool {
-	return r.Status == ReportStatusSuccess || r.Status == ReportStatusSuccess
+	return r.Status != ReportStatusProgress
+}
+
+func (r Report) ToJSON() []byte {
+	b, err := json.Marshal(r)
+	if err != nil {
+		return []byte("{}")
+	}
+	return b
 }
