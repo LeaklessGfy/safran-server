@@ -1,5 +1,5 @@
 events:
-	http --stream get http://localhost:8888/events?channel="TEST"
+	http --stream get http://localhost:8888/events?channel="$(ID)"
 
 uploadsmall:
 	http -f POST \

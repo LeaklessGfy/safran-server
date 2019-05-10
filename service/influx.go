@@ -139,6 +139,38 @@ func (i InfluxService) InsertBatchPoints(batchPoints client.BatchPoints) error {
 	return i.c.Write(batchPoints)
 }
 
+func (i InfluxService) Size() (string, error) {
+	var queries []client.Query
+
+	queries = append(queries, client.NewQuery("SELECT count(*) FROM experiments", "safran_db", ""))
+	queries = append(queries, client.NewQuery("SELECT count(*) FROM measures", "safran_db", ""))
+	queries = append(queries, client.NewQuery("SELECT count(*) FROM samples", "safran_db", ""))
+	queries = append(queries, client.NewQuery("SELECT count(*) FROM alarms", "safran_db", ""))
+
+	total := ""
+	for _, query := range queries {
+		response, err := i.c.Query(query)
+		if err != nil {
+			return "", err
+		}
+		if response.Error() != nil {
+			return "", response.Error()
+		}
+		for _, result := range response.Results {
+			total += "Messages :\n"
+			for _, msg := range result.Messages {
+				total += msg.Level + " " + msg.Text
+			}
+			total += "Series : \n"
+			for _, row := range result.Series {
+				total += fmt.Sprintf("%s", row.Values)
+			}
+		}
+	}
+
+	return total, nil
+}
+
 func (i InfluxService) Install() error {
 	query := client.NewQuery("CREATE DATABASE safran_db", "", "")
 	response, err := i.c.Query(query)
