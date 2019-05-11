@@ -22,12 +22,22 @@ services:
       - "8090:8090"
     volumes:
       - ./data:/var/lib/influxdb
-  chronograf:
-    container_name: safran-server-chrono
-    image: chronograf:latest
+  #chronograf:
+  #  container_name: safran-server-chrono
+  #  image: chronograf:latest
+  #  ports:
+  #    - "8889:8888"
+  #  links:
+  #    - influxdb
+  grafana:
+    container_name: safran-server-grafana
+    image: grafana/grafana:latest
     ports:
-      - "8889:8888"
+      - "3000:3000"
     links:
       - influxdb
+    volumes:
+      - ./data_grafana:/var/lib/grafana
 volumes:
   data:
+  data_grafana:
