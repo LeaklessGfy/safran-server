@@ -63,16 +63,14 @@ func (i ImportService) ImportExperiment(report *entity.Report, experiment *entit
 		return err
 	}
 
-	experiment.StartDate, err = utils.ParseDate(header.StartDate)
+	experiment.Date, err = utils.ParseDate(header.StartDate)
 	if i.handleError(err, report, entity.ReportStepParseDate) {
 		return err
 	}
 
-	experiment.EndDate, err = utils.ParseDate(header.EndDate)
-	if i.handleError(err, report, entity.ReportStepParseDate) {
-		return err
-	}
-
+	// Parse time to timestamp?
+	experiment.StartTime = header.StartDate
+	experiment.EndTime = header.EndDate
 	experiment.ID, err = i.influx.InsertExperiment(*experiment)
 	report.ExperimentID = experiment.ID
 	if i.handleError(err, report, entity.ReportStepInsertExperiment) {
@@ -104,7 +102,7 @@ func (i ImportService) ImportSamples(report entity.Report, experiment entity.Exp
 		samples, sizeSamples, end := i.samplesParser.ParseSamples(500, len(measuresID))
 		report.AddRead(sizeSamples).Step()
 
-		batchPoints, err := i.influx.PrepareSamples(experiment.ID, measuresID, experiment.StartDate, samples)
+		batchPoints, err := i.influx.PrepareSamples(experiment.ID, measuresID, experiment.Date, samples)
 		if i.handleErrorChan(err, &report, entity.ReportStepPrepareSamples+strconv.Itoa(inc), channel) || i.hasError() {
 			return
 		}
@@ -138,7 +136,7 @@ func (i ImportService) ImportAlarms(report entity.Report, experiment entity.Expe
 		return
 	}
 
-	batchPoints, err := i.influx.PrepareAlarms(experiment.ID, experiment.StartDate, alarms)
+	batchPoints, err := i.influx.PrepareAlarms(experiment.ID, experiment.Date, alarms)
 	report.Step()
 
 	if i.handleErrorChan(err, &report, entity.ReportStepPrepareAlarms, channel) || i.hasError() {

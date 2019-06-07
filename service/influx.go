@@ -216,10 +216,10 @@ func buildExperimentPoint(experiment entity.Experiment) (string, *client.Point, 
 		"bench":     experiment.Bench,
 		"campaign":  experiment.Campaign,
 		"isLocal":   false,
-		"startDate": experiment.StartDate,
-		"endDate":   experiment.EndDate,
+		"startTime": experiment.StartTime,
+		"endDate":   experiment.EndTime,
 	}
-	p, err := client.NewPoint("experiments", tags, fiels, time.Now())
+	p, err := client.NewPoint("experiments", tags, fiels, experiment.Date)
 	return id.String(), p, err
 }
 
