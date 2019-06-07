@@ -3,6 +3,7 @@ package parser
 import (
 	"bufio"
 	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -17,7 +18,12 @@ func parseLine(s *bufio.Scanner, skip int, limit int) ([]string, int, error) {
 	tmp := strings.Split(line, separator)
 	lgt := skip + limit
 	if len(tmp) < skip || len(tmp) < lgt {
-		return nil, 0, errors.New("Array index overflow")
+		return nil, 0, errors.New(
+			"Array index overflow, skip = " + strconv.Itoa(skip) +
+				", limit = " + strconv.Itoa(limit) +
+				", length = " + strconv.Itoa(len(tmp)) +
+				", line = " + line,
+		)
 	}
 	if limit < 1 {
 		lgt = len(tmp)

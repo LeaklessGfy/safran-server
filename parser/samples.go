@@ -62,7 +62,7 @@ func (p SamplesParser) ParseMeasures() ([]*entity.Measure, int, error) {
 }
 
 // ParseSamples parse the samples of the file
-func (p SamplesParser) ParseSamples(limit int, measuresLength int) ([]*entity.Sample, int, bool) {
+func (p SamplesParser) ParseSamples(limit int) ([]*entity.Sample, int, bool) {
 	var samples []*entity.Sample
 	var size int
 
@@ -77,7 +77,7 @@ func (p SamplesParser) ParseSamples(limit int, measuresLength int) ([]*entity.Sa
 
 		for i := 2; i < len(arr); i++ {
 			if len(arr[i]) > 0 && arr[i] != nan {
-				samples = append(samples, &entity.Sample{Value: arr[i], Time: arr[1], Measure: i - offset})
+				samples = append(samples, &entity.Sample{Value: arr[i], Time: arr[1], Inc: i - offset})
 			}
 		}
 	}
@@ -99,8 +99,8 @@ func (p SamplesParser) parseMeasures() ([]*entity.Measure, int, error) {
 		return nil, 0, err
 	}
 	var measures []*entity.Measure
-	for _, m := range arr {
-		measures = append(measures, &entity.Measure{Name: m})
+	for i, m := range arr {
+		measures = append(measures, &entity.Measure{Name: m, Inc: i})
 	}
 	p.scanner.Scan()
 	b := []byte(p.scanner.Text())

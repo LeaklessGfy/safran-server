@@ -3,10 +3,13 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
+	"github.com/leaklessgfy/safran-server/observer"
+	"github.com/leaklessgfy/safran-server/saver"
+
 	"github.com/leaklessgfy/safran-server/entity"
+	"github.com/leaklessgfy/safran-server/facade"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/leaklessgfy/safran-server/service"
@@ -14,37 +17,26 @@ import (
 
 // Server is an abstraction layer for http server
 type Server struct {
-	influx  *service.InfluxService
 	imports map[string]chan entity.Report
 }
 
 // NewServer create a server instance
-func NewServer() (*Server, error) {
-	influx, err := service.NewInfluxService()
-	if err != nil {
-		return nil, err
-	}
-
+func NewServer() *Server {
 	imports := make(map[string]chan entity.Report)
 	imports["TEST"] = make(chan entity.Report, 2)
 
 	return &Server{
-		influx:  influx,
 		imports: imports,
-	}, nil
+	}
 }
 
 // Start will start the http server and setup routes
-func (s Server) Start() error {
+func (s Server) Start(port string) error {
 	http.HandleFunc("/simple", s.simpleHandler)
 	http.HandleFunc("/upload", s.uploadHandler)
 	http.HandleFunc("/events", s.eventsHandler)
-	http.HandleFunc("/size", s.sizeHandler)
-	http.HandleFunc("/install", s.installHandler)
-	http.HandleFunc("/drop", s.dropHandler)
-	log.Println("Server Start on :8888")
 
-	return http.ListenAndServe(":8888", nil)
+	return http.ListenAndServe(port, nil)
 }
 
 func (s Server) simpleHandler(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +51,7 @@ func (s Server) simpleHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
 	r.ParseMultipartForm(32 << 20)
 
 	channelUUID, err := uuid.NewV4()
@@ -74,53 +67,48 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// EXPERIMENT
 	experiment, err := service.ExtractExperiment(r)
 	if err != nil {
-		jsonR.Encode(report.AddError(entity.ReportStepExtractExperiment, err))
+		jsonR.Encode(report.AddError(entity.StepExtractExperiment, err))
 		return
 	}
-	report.AddSuccess(entity.ReportStepExtractExperiment)
+	report.AddSuccess(entity.StepExtractExperiment)
 
 	// FILES
 	samplesFile, samplesSize, err := service.ExtractSamples(r)
 	if err != nil {
-		jsonR.Encode(report.AddError(entity.ReportStepExtractSamples, err))
+		jsonR.Encode(report.AddError(entity.StepExtractSamples, err))
 		return
 	}
 	report.SamplesSize = samplesSize
-	report.AddSuccess(entity.ReportStepExtractSamples)
+	report.AddSuccess(entity.StepExtractSamples)
 	defer samplesFile.Close()
 
 	alarmsFile, alarmsSize, err := service.ExtractAlarms(r)
 	if err != nil {
-		jsonR.Encode(report.AddError(entity.ReportStepExtractAlarms, err))
+		jsonR.Encode(report.AddError(entity.StepExtractAlarms, err))
 		return
 	}
 	if alarmsFile != nil {
 		report.HasAlarms = true
 		report.AlarmsSize = alarmsSize
-		report.AddSuccess(entity.ReportStepExtractAlarms)
+		report.AddSuccess(entity.StepExtractAlarms)
 		defer alarmsFile.Close()
 	}
 
 	// IMPORT
-	importService, err := service.NewImportService(s.influx, samplesFile, alarmsFile)
-	if err != nil {
-		jsonR.Encode(report.AddError(entity.ReportStepInitImport, err))
-		return
-	}
-	report.AddSuccess(entity.ReportStepInitImport)
 
-	err = importService.ImportExperiment(report, experiment)
+	saver := saver.FakeSaver{}
+	observer := observer.LoggerObserver{}
+	facade := facade.NewParserFacade(saver, observer, samplesFile, alarmsFile)
+
+	err = facade.Parse(experiment)
 	if err != nil {
-		jsonR.Encode(report)
+		jsonR.Encode(report.AddError(entity.StepInitImport, err))
 		return
 	}
+	report.AddSuccess(entity.StepInitImport)
 
 	channel := make(chan entity.Report, 50)
 	s.imports[channelID] = channel
-
-	go importService.ImportSamples(*report.Copy(entity.ReportTypeSamples), *experiment, channel)
-	go importService.ImportAlarms(*report.Copy(entity.ReportTypeAlarms), *experiment, channel)
-	go importService.Save(*report.Copy(entity.ReportTypeClient), channel)
 
 	jsonR.Encode(report)
 }
@@ -155,38 +143,11 @@ func (s Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "data: %s\n\n", report.ToJSON())
 			flusher.Flush()
 
-			if report.HasComplete() && report.Type == entity.ReportTypeClient {
+			if report.HasComplete() && report.Type == entity.TypeClient {
 				close(channel)
 				delete(s.imports, channelID)
 				return
 			}
 		}
-	}
-}
-
-func (s Server) sizeHandler(w http.ResponseWriter, r *http.Request) {
-	size, err := s.influx.Size()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		w.Write([]byte(size))
-	}
-}
-
-func (s Server) installHandler(w http.ResponseWriter, r *http.Request) {
-	err := s.influx.Install()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		w.Write([]byte("done\n"))
-	}
-}
-
-func (s Server) dropHandler(w http.ResponseWriter, r *http.Request) {
-	err := s.influx.Drop()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		w.Write([]byte("done\n"))
 	}
 }

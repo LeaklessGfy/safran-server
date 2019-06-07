@@ -18,6 +18,7 @@ func ParseDate(str string) (time.Time, error) {
 
 // ParseTime parse a time representation (ex: 12:03:00 or 12:04:05.555) to Time struct
 func ParseTime(str string, date time.Time) (time.Time, error) {
+	var err error
 	hour := date.Hour()
 	min := date.Minute()
 	sec := date.Second()
@@ -28,14 +29,35 @@ func ParseTime(str string, date time.Time) (time.Time, error) {
 	})
 
 	if len(strSplit) == 3 {
-		min, _ = strconv.Atoi(strSplit[0])
-		sec, _ = strconv.Atoi(strSplit[1])
-		nano, _ = strconv.Atoi(strSplit[2])
+		min, err = strconv.Atoi(strSplit[0])
+		if err != nil {
+			return date, err
+		}
+		sec, err = strconv.Atoi(strSplit[1])
+		if err != nil {
+			return date, err
+		}
+		nano, err = strconv.Atoi(strSplit[2])
+		if err != nil {
+			return date, err
+		}
 	} else if len(strSplit) == 4 {
-		hour, _ = strconv.Atoi(strSplit[0])
-		min, _ = strconv.Atoi(strSplit[1])
-		sec, _ = strconv.Atoi(strSplit[2])
-		nano, _ = strconv.Atoi(strSplit[3])
+		hour, err = strconv.Atoi(strSplit[0])
+		if err != nil {
+			return date, err
+		}
+		min, err = strconv.Atoi(strSplit[1])
+		if err != nil {
+			return date, err
+		}
+		sec, err = strconv.Atoi(strSplit[2])
+		if err != nil {
+			return date, err
+		}
+		nano, err = strconv.Atoi(strSplit[3])
+		if err != nil {
+			return date, err
+		}
 	} else {
 		return date, errors.New("Bad time formatting " + str)
 	}

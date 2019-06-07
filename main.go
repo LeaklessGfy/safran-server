@@ -7,9 +7,11 @@ import (
 )
 
 func main() {
-	server, err := server.NewServer()
+	server := server.NewServer()
+
+	log.Println("Start Server on :8888")
+	err := server.Start(":8888")
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Fatal(server.Start())
 }

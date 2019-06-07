@@ -3,43 +3,44 @@ package entity
 import "encoding/json"
 
 const (
-	ReportTypeExperiment = "Experiment"
-	ReportTypeSamples    = "Samples"
-	ReportTypeAlarms     = "Alarms"
-	ReportTypeClient     = "Client"
+	TypeExperiment = "Experiment"
+	TypeSamples    = "Samples"
+	TypeAlarms     = "Alarms"
+	TypeClient     = "Client"
 )
 
 const (
-	ReportStatusFailure  = "failure"
-	ReportStatusSuccess  = "success"
-	ReportStatusProgress = "progress"
+	StatusFailure  = "failure"
+	StatusSuccess  = "success"
+	StatusProgress = "progress"
 )
 
 const (
-	ReportStepInit = "1_INIT"
+	StepInit = "1_INIT"
 
-	ReportStepExtractExperiment = "2_EXTRACT_EXPERIMENT"
-	ReportStepExtractSamples    = "3_EXTRACT_SAMPLES"
-	ReportStepExtractAlarms     = "4_EXTRACT_ALARMS"
+	StepExtractExperiment = "2_EXTRACT_EXPERIMENT"
+	StepExtractSamples    = "3.1_EXTRACT_SAMPLES"
+	StepExtractAlarms     = "3.2_EXTRACT_ALARMS"
 
-	ReportStepInitImport = "5_INIT_IMPORT"
+	StepInitImport = "4_INIT_IMPORT"
 
-	ReportStepParseHeader      = "6_PARSE_HEADER"
-	ReportStepParseDate        = "7_PARSE_DATE"
-	ReportStepInsertExperiment = "8_INSERT_EXPERIMENT"
+	StepParseHeader    = "5_PARSE_HEADER"
+	StepParseStartDate = "6.1_PARSE_START_DATE"
+	StepParseEndDate   = "6.2_PARSE_END_DATE"
+	StepSaveExperiment = "7_SAVE_EXPERIMENT"
 
-	ReportStepParseMeasures  = "1_PARSE_MEASURES"
-	ReportStepInsertMeasures = "2_INSERT_MEASURES"
-	ReportStepParseSamples   = "3_PARSE_SAMPLES"
-	ReportStepPrepareSamples = "4_PREPARE_SAMPLES_"
-	ReportStepInsertSamples  = "5_INSERT_SAMPLES_"
+	StepParseMeasures = "8.1.1_PARSE_MEASURES"
+	StepSaveMeasures  = "8.1.2_SAVE_MEASURES"
+	StepParseSamples  = "8.1.3_PARSE_SAMPLES_"
+	StepSaveSamples   = "8.1.4_SAVE_SAMPLES_"
 
-	ReportStepParseAlarms   = "1_PARSE_ALARMS"
-	ReportStepPrepareAlarms = "2_PREPARE_ALARMS_"
-	ReportStepInsertAlarms  = "3_INSERT_ALARMS_"
+	StepParseAlarms = "8.2.1_PARSE_ALARMS_"
+	StepSaveAlarms  = "8.2.2_SAVE_ALARMS_"
 
-	ReportStepInsertPoints     = "Y_INSERT_POINTS"
-	ReportStepRemoveExperiment = "X_REMOVE_EXPERIMENT"
+	StepFullEnd = "9_END"
+
+	StepInsertPoints = "Y_INSERT_POINTS"
+	StepCancel       = "X_CANCEL"
 )
 
 type Report struct {
@@ -61,13 +62,13 @@ type Report struct {
 func NewReport(channel string) *Report {
 	errors := make(map[string]string)
 	steps := make(map[string]bool)
-	steps[ReportStepInit] = true
+	steps[StepInit] = true
 
 	return &Report{
 		ID:           1,
 		Channel:      channel,
-		Type:         ReportTypeExperiment,
-		Status:       ReportStatusProgress,
+		Type:         TypeExperiment,
+		Status:       StatusProgress,
 		ExperimentID: "",
 		HasAlarms:    false,
 		Progress:     0,
@@ -75,7 +76,7 @@ func NewReport(channel string) *Report {
 		AlarmsSize:   0,
 		Errors:       errors,
 		Steps:        steps,
-		Current:      ReportStepInit,
+		Current:      StepInit,
 	}
 }
 
@@ -108,7 +109,7 @@ func (r *Report) AddSuccess(step string) *Report {
 
 func (r *Report) AddError(step string, err error) *Report {
 	r.Current = step
-	r.Status = ReportStatusFailure
+	r.Status = StatusFailure
 	r.Steps[step] = false
 	r.Errors[step] = err.Error()
 	return r
@@ -126,7 +127,7 @@ func (r *Report) AddRead(size int) *Report {
 }
 
 func (r *Report) End() {
-	r.Status = ReportStatusSuccess
+	r.Status = StatusSuccess
 	r.Progress = 100
 }
 
@@ -135,7 +136,7 @@ func (r Report) HasError() bool {
 }
 
 func (r Report) HasComplete() bool {
-	return r.Status != ReportStatusProgress
+	return r.Status != StatusProgress
 }
 
 func (r Report) ToJSON() []byte {

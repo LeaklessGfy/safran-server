@@ -2,6 +2,7 @@ package saver
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	client "github.com/influxdata/influxdb1-client/v2"
@@ -18,11 +19,10 @@ const (
 type InfluxSaver struct {
 	c            client.Client
 	experimentID string
-	measuresID   []string
 	date         time.Time
 }
 
-func (i *InfluxSaver) SaveExperiment(experiment *entity.Experiment) error {
+func (s *InfluxSaver) SaveExperiment(experiment *entity.Experiment) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
@@ -32,77 +32,67 @@ func (i *InfluxSaver) SaveExperiment(experiment *entity.Experiment) error {
 		return err
 	}
 	batchPoints.AddPoint(point)
-	err = i.c.Write(batchPoints)
+	err = s.c.Write(batchPoints)
 	if err != nil {
 		return err
 	}
-	i.experimentID = id
-	i.date = experiment.StartDate
+	s.experimentID = id
+	s.date = experiment.StartDate
 	return nil
 }
 
-func (i *InfluxSaver) SaveMeasures(measures []*entity.Measure) error {
+func (s InfluxSaver) SaveMeasures(measures []*entity.Measure) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
 	}
-	var measuresID []string
 	for _, measure := range measures {
-		id, point, err := buildMeasurePoint(i.experimentID, measure)
+		point, err := buildMeasurePoint(s.experimentID, measure)
 		if err != nil {
 			return err
 		}
 		batchPoints.AddPoint(point)
-		measuresID = append(measuresID, id)
 	}
-	err = i.c.Write(batchPoints)
-	if err != nil {
-		return err
-	}
-	i.measuresID = measuresID
-	return nil
+	return s.c.Write(batchPoints)
 }
 
-func (i InfluxSaver) SaveSamples(samples []*entity.Sample) error {
+func (s InfluxSaver) SaveSamples(samples []*entity.Sample) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
 	}
 	for _, sample := range samples {
-		measureID := i.measuresID[sample.Measure]
-		point, err := buildSamplePoint(i.experimentID, measureID, i.date, sample)
+		point, err := buildSamplePoint(s.experimentID, s.date, sample)
 		if err != nil {
 			return err
 		}
 		batchPoints.AddPoint(point)
 	}
-	// send those points to thread
-	return nil
+	return s.c.Write(batchPoints)
 }
 
-func (i InfluxSaver) SaveAlarms(alarms []*entity.Alarm) error {
+func (s InfluxSaver) SaveAlarms(alarms []*entity.Alarm) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
 	}
 	for _, alarm := range alarms {
-		point, err := buildAlarmPoint(i.experimentID, i.date, alarm)
+		point, err := buildAlarmPoint(s.experimentID, s.date, alarm)
 		if err != nil {
 			return err
 		}
 		batchPoints.AddPoint(point)
 	}
-	// send those points to thread
-	return nil
+	return s.c.Write(batchPoints)
 }
 
-func (i InfluxSaver) Cancel() error {
+func (s InfluxSaver) Cancel() error {
 	var queries []client.Query
 
-	query1 := client.NewQuery(fmt.Sprintf(`DELETE FROM experiments WHERE "id"='%s'`, i.experimentID), DB, PRECISION)
-	query2 := client.NewQuery(fmt.Sprintf(`DELETE FROM measures WHERE "experimentID"='%s'`, i.experimentID), DB, PRECISION)
-	query3 := client.NewQuery(fmt.Sprintf(`DELETE FROM samples WHERE "experimentID"='%s'`, i.experimentID), DB, PRECISION)
-	query4 := client.NewQuery(fmt.Sprintf(`DELETE FROM alarms WHERE "experimentID"='%s'`, i.experimentID), DB, PRECISION)
+	query1 := client.NewQuery(fmt.Sprintf(`DELETE FROM experiments WHERE "id"='%s'`, s.experimentID), DB, PRECISION)
+	query2 := client.NewQuery(fmt.Sprintf(`DELETE FROM measures WHERE "experimentID"='%s'`, s.experimentID), DB, PRECISION)
+	query3 := client.NewQuery(fmt.Sprintf(`DELETE FROM samples WHERE "experimentID"='%s'`, s.experimentID), DB, PRECISION)
+	query4 := client.NewQuery(fmt.Sprintf(`DELETE FROM alarms WHERE "experimentID"='%s'`, s.experimentID), DB, PRECISION)
 
 	queries = append(queries, query1)
 	queries = append(queries, query2)
@@ -110,7 +100,7 @@ func (i InfluxSaver) Cancel() error {
 	queries = append(queries, query4)
 
 	for _, query := range queries {
-		response, err := i.c.Query(query)
+		response, err := s.c.Query(query)
 		if err != nil {
 			return err
 		}
@@ -149,10 +139,10 @@ func buildExperimentPoint(experiment *entity.Experiment) (string, *client.Point,
 	return id.String(), point, err
 }
 
-func buildMeasurePoint(experimentID string, measure *entity.Measure) (string, *client.Point, error) {
+func buildMeasurePoint(experimentID string, measure *entity.Measure) (*client.Point, error) {
 	id, err := uuid.NewV4()
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	tags := map[string]string{
 		"id":           id.String(),
@@ -163,14 +153,13 @@ func buildMeasurePoint(experimentID string, measure *entity.Measure) (string, *c
 		"type": measure.Typex,
 		"unit": measure.Unitx,
 	}
-	point, err := client.NewPoint("measures", tags, fields, time.Now())
-	return id.String(), point, err
+	return client.NewPoint("measures", tags, fields, time.Now())
 }
 
-func buildSamplePoint(experimentID, measureID string, experimentDate time.Time, sample *entity.Sample) (*client.Point, error) {
+func buildSamplePoint(experimentID string, experimentDate time.Time, sample *entity.Sample) (*client.Point, error) {
 	tags := map[string]string{
 		"experimentID": experimentID,
-		"measureID":    measureID,
+		"inc":          strconv.Itoa(sample.Inc),
 	}
 	fields := map[string]interface{}{
 		"value": sample.Value,

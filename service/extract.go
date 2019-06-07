@@ -5,6 +5,7 @@ import (
 	"errors"
 	"mime/multipart"
 	"net/http"
+	"os"
 
 	"github.com/leaklessgfy/safran-server/entity"
 )
@@ -33,7 +34,7 @@ func ExtractExperiment(r *http.Request) (*entity.Experiment, error) {
 func ExtractSamples(r *http.Request) (multipart.File, int64, error) {
 	samplesFile, _, err := r.FormFile("samples")
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, errors.New("samples is required " + err.Error())
 	}
 	samplesSize, err := getSize(samplesFile)
 	if err != nil {
@@ -62,5 +63,22 @@ func getSize(file multipart.File) (int64, error) {
 	if _, err := file.Seek(0, 0); err != nil {
 		return 0, err
 	}
-	return file.(Sizer).Size(), nil
+
+	sz, ok := file.(Sizer)
+
+	if ok {
+		return sz.Size(), nil
+	}
+
+	fi, ok := file.(*os.File)
+	if !ok {
+		return 0, errors.New("Can't determine file")
+	}
+
+	stats, err := fi.Stat()
+	if err != nil {
+		return 0, nil
+	}
+
+	return stats.Size(), nil
 }
