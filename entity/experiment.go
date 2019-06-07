@@ -12,9 +12,8 @@ type Experiment struct {
 	Name      string
 	Bench     string
 	Campaign  string
-	Date      time.Time
-	StartTime string
-	EndTime   string
+	StartDate time.Time
+	EndDate   time.Time
 }
 
 // Validate check if current experiement is valide

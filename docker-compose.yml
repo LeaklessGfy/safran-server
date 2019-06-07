@@ -1,15 +1,5 @@
 version: '3'
 services:
-  #couchdb:
-  #  container_name: safran-db
-  #  image: couchdb:latest 
-  #  environment:
-  #    COUCHDB_USER: adm
-  #    COUCHDB_PASSWORD: pass
-  #  ports:
-  #    - "5984:5984"
-  #  volumes:
-  #    - ./data:/opt/couchdb/data
   influxdb:
     container_name: safran-server-influx
     image: influxdb:latest
@@ -29,15 +19,15 @@ services:
   #    - "8889:8888"
   #  links:
   #    - influxdb
-  grafana:
-    container_name: safran-server-grafana
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    links:
-      - influxdb
-    volumes:
-      - ./data_grafana:/var/lib/grafana
+  #grafana:
+  #  container_name: safran-server-grafana
+  #  image: grafana/grafana:latest
+  #  ports:
+  #    - "3000:3000"
+  #  links:
+  #    - influxdb
+  #  volumes:
+  #    - ./data_grafana:/var/lib/grafana
 volumes:
   data:
-  data_grafana:
+  #data_grafana:
