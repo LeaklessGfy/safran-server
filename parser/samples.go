@@ -76,7 +76,7 @@ func (p SamplesParser) ParseSamples(limit int, measuresLength int) ([]*entity.Sa
 		arr := strings.Split(line, separator)
 
 		for i := 2; i < len(arr); i++ {
-			if len(arr[i]) > 0 && arr[i] != nan && i < measuresLength {
+			if len(arr[i]) > 0 && arr[i] != nan {
 				samples = append(samples, &entity.Sample{Value: arr[i], Time: arr[1], Measure: i - offset})
 			}
 		}
@@ -89,9 +89,6 @@ func (p SamplesParser) parseDate() (string, int, error) {
 	arr, size, err := parseLine(p.scanner, 1, 1)
 	if err != nil {
 		return "", 0, err
-	}
-	if len(arr) < 1 {
-		return "", 0, errors.New("")
 	}
 	return arr[0], size, nil
 }
