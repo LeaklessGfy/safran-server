@@ -8,13 +8,13 @@ import (
 
 	"github.com/leaklessgfy/safran-server/entity"
 	"github.com/leaklessgfy/safran-server/observer"
+	"github.com/leaklessgfy/safran-server/output"
 	"github.com/leaklessgfy/safran-server/parser"
-	"github.com/leaklessgfy/safran-server/saver"
 	"github.com/leaklessgfy/safran-server/utils"
 )
 
 type ParserFacade struct {
-	saver         saver.Saver
+	output        output.Output
 	observer      observer.Observer
 	samplesParser *parser.SamplesParser
 	alarmsParser  *parser.AlarmsParser
@@ -23,7 +23,7 @@ type ParserFacade struct {
 	events        chan Event
 }
 
-func NewParserFacade(saver saver.Saver, observer observer.Observer, samplesReader, alarmsReader io.Reader) *ParserFacade {
+func NewParserFacade(output output.Output, observer observer.Observer, samplesReader, alarmsReader io.Reader) *ParserFacade {
 	samplesParser := parser.NewSamplesParser(samplesReader)
 	var alarmsParser *parser.AlarmsParser
 	if alarmsReader != nil {
@@ -33,7 +33,7 @@ func NewParserFacade(saver saver.Saver, observer observer.Observer, samplesReade
 	events := make(chan Event, 10)
 
 	return &ParserFacade{
-		saver:         saver,
+		output:        output,
 		observer:      observer,
 		samplesParser: samplesParser,
 		alarmsParser:  alarmsParser,
@@ -46,7 +46,7 @@ func NewParserFacade(saver saver.Saver, observer observer.Observer, samplesReade
 func (p ParserFacade) Parse(experiment *entity.Experiment) error {
 	err := p.importExperiment(experiment)
 	if err != nil {
-		p.saver.Cancel()
+		p.output.Cancel()
 		return err
 	}
 	max := 2
@@ -75,28 +75,29 @@ func (p ParserFacade) initEvents(max int) {
 				inc++
 				if inc == max {
 					p.stop()
-					err = p.saver.End()
+					err = p.output.End()
 					if err != nil {
-						log.Println(err)
+						p.output.Cancel()
+						return
 					}
 					p.observer.OnStep(event.step)
 					return
 				}
 				break
 			case MeasureID:
-				err = p.saver.SaveMeasures(event.measures)
+				err = p.output.SaveMeasures(event.measures)
 				if p.handleError(event.step, err) {
 					return
 				}
 				break
 			case SamplesID:
-				err = p.saver.SaveSamples(event.samples)
+				err = p.output.SaveSamples(event.samples)
 				if p.handleError(event.step, err) {
 					return
 				}
 				break
 			case AlarmsID:
-				err = p.saver.SaveAlarms(event.alarms)
+				err = p.output.SaveAlarms(event.alarms)
 				if p.handleError(event.step, err) {
 					return
 				}
@@ -123,7 +124,7 @@ func (p ParserFacade) importExperiment(experiment *entity.Experiment) error {
 		return err
 	}
 
-	err = p.saver.SaveExperiment(experiment)
+	err = p.output.SaveExperiment(experiment)
 	if p.handleError(entity.StepSaveExperiment, err) {
 		return err
 	}
@@ -233,9 +234,9 @@ func (p ParserFacade) handleError(step string, err error) bool {
 	p.observer.OnStep(step)
 	if err != nil {
 		p.stop()
-		errCancel := p.saver.Cancel()
+		errCancel := p.output.Cancel()
 		if errCancel != nil {
-			log.Println(errCancel)
+			log.Println("[ERROR CANCEL]", errCancel)
 		}
 		p.observer.OnError(step, err)
 		p.observer.OnStep(entity.StepCancel)

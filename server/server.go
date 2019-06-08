@@ -71,8 +71,8 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	report.AddSuccess(entity.StepExtractExperiment)
 
-	// SAVER
-	saver, err := service.ExtractSaver(r)
+	// OUTPUT
+	output, err := service.ExtractOutput(r)
 	if err != nil {
 		jsonR.Encode(report.AddError(entity.StepExtractSaver, err))
 		return
@@ -103,7 +103,7 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// IMPORT
 	observer := observer.LoggerObserver{}
-	facade := facade.NewParserFacade(saver, observer, samplesFile, alarmsFile)
+	facade := facade.NewParserFacade(output, observer, samplesFile, alarmsFile)
 
 	err = facade.Parse(experiment)
 	if err != nil {

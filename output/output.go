@@ -1,10 +1,10 @@
-package saver
+package output
 
 import (
 	"github.com/leaklessgfy/safran-server/entity"
 )
 
-type Saver interface {
+type Output interface {
 	SaveExperiment(*entity.Experiment) error
 	SaveMeasures([]*entity.Measure) error
 	SaveSamples([]*entity.Sample) error

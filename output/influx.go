@@ -1,4 +1,4 @@
-package saver
+package output
 
 import (
 	"fmt"
@@ -16,13 +16,23 @@ const (
 	PRECISION = "ms"
 )
 
-type InfluxSaver struct {
+type InfluxOutput struct {
 	c            client.Client
 	experimentID string
 	date         time.Time
 }
 
-func (s *InfluxSaver) SaveExperiment(experiment *entity.Experiment) error {
+func NewInfluxOutput() (*InfluxOutput, error) {
+	c, err := client.NewHTTPClient(client.HTTPConfig{
+		Addr: "http://localhost:8086",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &InfluxOutput{c: c}, nil
+}
+
+func (o *InfluxOutput) SaveExperiment(experiment *entity.Experiment) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
@@ -32,67 +42,67 @@ func (s *InfluxSaver) SaveExperiment(experiment *entity.Experiment) error {
 		return err
 	}
 	batchPoints.AddPoint(point)
-	err = s.c.Write(batchPoints)
+	err = o.c.Write(batchPoints)
 	if err != nil {
 		return err
 	}
-	s.experimentID = id
-	s.date = experiment.StartDate
+	o.experimentID = id
+	o.date = experiment.StartDate
 	return nil
 }
 
-func (s InfluxSaver) SaveMeasures(measures []*entity.Measure) error {
+func (o InfluxOutput) SaveMeasures(measures []*entity.Measure) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
 	}
 	for _, measure := range measures {
-		point, err := buildMeasurePoint(s.experimentID, measure)
+		point, err := buildMeasurePoint(o.experimentID, measure)
 		if err != nil {
 			return err
 		}
 		batchPoints.AddPoint(point)
 	}
-	return s.c.Write(batchPoints)
+	return o.c.Write(batchPoints)
 }
 
-func (s InfluxSaver) SaveSamples(samples []*entity.Sample) error {
+func (o InfluxOutput) SaveSamples(samples []*entity.Sample) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
 	}
 	for _, sample := range samples {
-		point, err := buildSamplePoint(s.experimentID, s.date, sample)
+		point, err := buildSamplePoint(o.experimentID, o.date, sample)
 		if err != nil {
 			return err
 		}
 		batchPoints.AddPoint(point)
 	}
-	return s.c.Write(batchPoints)
+	return o.c.Write(batchPoints)
 }
 
-func (s InfluxSaver) SaveAlarms(alarms []*entity.Alarm) error {
+func (o InfluxOutput) SaveAlarms(alarms []*entity.Alarm) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
 	}
 	for _, alarm := range alarms {
-		point, err := buildAlarmPoint(s.experimentID, s.date, alarm)
+		point, err := buildAlarmPoint(o.experimentID, o.date, alarm)
 		if err != nil {
 			return err
 		}
 		batchPoints.AddPoint(point)
 	}
-	return s.c.Write(batchPoints)
+	return o.c.Write(batchPoints)
 }
 
-func (s InfluxSaver) Cancel() error {
+func (o InfluxOutput) Cancel() error {
 	var queries []client.Query
 
-	query1 := client.NewQuery(fmt.Sprintf(`DELETE FROM experiments WHERE "id"='%s'`, s.experimentID), DB, PRECISION)
-	query2 := client.NewQuery(fmt.Sprintf(`DELETE FROM measures WHERE "experimentID"='%s'`, s.experimentID), DB, PRECISION)
-	query3 := client.NewQuery(fmt.Sprintf(`DELETE FROM samples WHERE "experimentID"='%s'`, s.experimentID), DB, PRECISION)
-	query4 := client.NewQuery(fmt.Sprintf(`DELETE FROM alarms WHERE "experimentID"='%s'`, s.experimentID), DB, PRECISION)
+	query1 := client.NewQuery(fmt.Sprintf(`DELETE FROM experiments WHERE "id"='%s'`, o.experimentID), DB, PRECISION)
+	query2 := client.NewQuery(fmt.Sprintf(`DELETE FROM measures WHERE "experimentID"='%s'`, o.experimentID), DB, PRECISION)
+	query3 := client.NewQuery(fmt.Sprintf(`DELETE FROM samples WHERE "experimentID"='%s'`, o.experimentID), DB, PRECISION)
+	query4 := client.NewQuery(fmt.Sprintf(`DELETE FROM alarms WHERE "experimentID"='%s'`, o.experimentID), DB, PRECISION)
 
 	queries = append(queries, query1)
 	queries = append(queries, query2)
@@ -100,7 +110,7 @@ func (s InfluxSaver) Cancel() error {
 	queries = append(queries, query4)
 
 	for _, query := range queries {
-		response, err := s.c.Query(query)
+		response, err := o.c.Query(query)
 		if err != nil {
 			return err
 		}
@@ -109,7 +119,11 @@ func (s InfluxSaver) Cancel() error {
 		}
 	}
 
-	return nil
+	return o.End()
+}
+
+func (o InfluxOutput) End() error {
+	return o.c.Close()
 }
 
 func buildBatchPoints() (client.BatchPoints, error) {
