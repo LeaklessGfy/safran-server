@@ -3,6 +3,7 @@ package facade
 import (
 	"context"
 	"io"
+	"log"
 	"strconv"
 
 	"github.com/leaklessgfy/safran-server/entity"
@@ -18,7 +19,7 @@ type ParserFacade struct {
 	samplesParser *parser.SamplesParser
 	alarmsParser  *parser.AlarmsParser
 	ctx           context.Context
-	cancel        context.CancelFunc
+	stop          context.CancelFunc
 	events        chan Event
 }
 
@@ -37,7 +38,7 @@ func NewParserFacade(saver saver.Saver, observer observer.Observer, samplesReade
 		samplesParser: samplesParser,
 		alarmsParser:  alarmsParser,
 		ctx:           ctx,
-		cancel:        cancel,
+		stop:          cancel,
 		events:        events,
 	}
 }
@@ -45,6 +46,7 @@ func NewParserFacade(saver saver.Saver, observer observer.Observer, samplesReade
 func (p ParserFacade) Parse(experiment *entity.Experiment) error {
 	err := p.importExperiment(experiment)
 	if err != nil {
+		p.saver.Cancel()
 		return err
 	}
 	max := 2
@@ -62,49 +64,40 @@ func (p ParserFacade) Parse(experiment *entity.Experiment) error {
 func (p ParserFacade) initEvents(max int) {
 	var inc int
 	var err error
-	handleError := func(step string, err error) bool {
-		p.observer.OnStep(step)
-		if err != nil {
-			p.cancel()
-			p.observer.OnError(step, err)
-			p.saver.Cancel()
-			p.observer.OnStep(entity.StepCancel)
-			return true
-		}
-		return false
-	}
 
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.saver.Cancel()
-			p.observer.OnStep(entity.StepCancel)
 			return
 		case event := <-p.events:
 			switch event.id {
 			case EndID:
 				inc++
 				if inc == max {
+					p.stop()
+					err = p.saver.End()
+					if err != nil {
+						log.Println(err)
+					}
 					p.observer.OnStep(event.step)
-					p.cancel()
 					return
 				}
 				break
 			case MeasureID:
 				err = p.saver.SaveMeasures(event.measures)
-				if handleError(event.step, err) {
+				if p.handleError(event.step, err) {
 					return
 				}
 				break
 			case SamplesID:
 				err = p.saver.SaveSamples(event.samples)
-				if handleError(event.step, err) {
+				if p.handleError(event.step, err) {
 					return
 				}
 				break
 			case AlarmsID:
 				err = p.saver.SaveAlarms(event.alarms)
-				if handleError(event.step, err) {
+				if p.handleError(event.step, err) {
 					return
 				}
 				break
@@ -116,30 +109,22 @@ func (p ParserFacade) initEvents(max int) {
 func (p ParserFacade) importExperiment(experiment *entity.Experiment) error {
 	header, size, err := p.samplesParser.ParseHeader()
 	p.observer.OnRead(size)
-	p.observer.OnStep(entity.StepParseHeader)
-	if err != nil {
-		p.observer.OnError(entity.StepParseHeader, err)
+	if p.handleError(entity.StepParseHeader, err) {
 		return err
 	}
 
 	experiment.StartDate, err = utils.ParseDate(header.StartDate)
-	p.observer.OnStep(entity.StepParseStartDate)
-	if err != nil {
-		p.observer.OnError(entity.StepParseStartDate, err)
+	if p.handleError(entity.StepParseStartDate, err) {
 		return err
 	}
 
 	experiment.EndDate, err = utils.ParseDate(header.EndDate)
-	p.observer.OnStep(entity.StepParseEndDate)
-	if err != nil {
-		p.observer.OnError(entity.StepParseEndDate, err)
+	if p.handleError(entity.StepParseEndDate, err) {
 		return err
 	}
 
 	err = p.saver.SaveExperiment(experiment)
-	p.observer.OnStep(entity.StepSaveExperiment)
-	if err != nil {
-		p.observer.OnError(entity.StepSaveExperiment, err)
+	if p.handleError(entity.StepSaveExperiment, err) {
 		return err
 	}
 
@@ -161,14 +146,11 @@ func (p ParserFacade) importMeasures() error {
 
 	measures, size, err := p.samplesParser.ParseMeasures()
 	p.observer.OnRead(size)
-	p.observer.OnStep(entity.StepParseMeasures)
-	if err != nil || p.hasError() {
-		p.observer.OnError(entity.StepParseMeasures, err)
-		p.cancel()
+	if p.handleError(entity.StepParseMeasures, err) || p.hasError() {
 		return err
 	}
-
 	p.dispatchMeasures(measures)
+
 	return nil
 }
 
@@ -178,7 +160,6 @@ func (p ParserFacade) importSamples() {
 	}
 
 	inc := 0
-
 	for !p.hasError() {
 		inc++
 		strInc := strconv.Itoa(inc)
@@ -207,10 +188,7 @@ func (p ParserFacade) importAlarms() {
 
 	alarms, size, err := p.alarmsParser.ParseAlarms()
 	p.observer.OnRead(size)
-	p.observer.OnStep(entity.StepParseAlarms + "1")
-	if err != nil || p.hasError() {
-		p.observer.OnError(entity.StepParseAlarms+"1", err)
-		p.cancel()
+	if p.handleError(entity.StepParseAlarms+"1", err) || p.hasError() {
 		return
 	}
 
@@ -249,6 +227,21 @@ func (p ParserFacade) dispatchAlarms(alarms []*entity.Alarm, inc string) {
 
 func (p ParserFacade) dispatchEnd() {
 	p.events <- Event{id: EndID, step: entity.StepFullEnd}
+}
+
+func (p ParserFacade) handleError(step string, err error) bool {
+	p.observer.OnStep(step)
+	if err != nil {
+		p.stop()
+		errCancel := p.saver.Cancel()
+		if errCancel != nil {
+			log.Println(errCancel)
+		}
+		p.observer.OnError(step, err)
+		p.observer.OnStep(entity.StepCancel)
+		return true
+	}
+	return false
 }
 
 func (p ParserFacade) hasError() bool {

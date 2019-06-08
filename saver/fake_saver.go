@@ -23,3 +23,7 @@ func (s FakeSaver) SaveAlarms([]*entity.Alarm) error {
 func (s FakeSaver) Cancel() error {
 	return nil
 }
+
+func (s FakeSaver) End() error {
+	return nil
+}

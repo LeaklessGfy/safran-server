@@ -10,4 +10,5 @@ type Saver interface {
 	SaveSamples([]*entity.Sample) error
 	SaveAlarms([]*entity.Alarm) error
 	Cancel() error
+	End() error
 }

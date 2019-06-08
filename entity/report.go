@@ -19,28 +19,28 @@ const (
 	StepInit = "1_INIT"
 
 	StepExtractExperiment = "2_EXTRACT_EXPERIMENT"
-	StepExtractSamples    = "3.1_EXTRACT_SAMPLES"
-	StepExtractAlarms     = "3.2_EXTRACT_ALARMS"
+	StepExtractSaver      = "3_EXTRACT_SAVER"
+	StepExtractSamples    = "4.1_EXTRACT_SAMPLES"
+	StepExtractAlarms     = "4.2_EXTRACT_ALARMS"
 
-	StepInitImport = "4_INIT_IMPORT"
+	StepInitImport = "5_INIT_IMPORT"
 
-	StepParseHeader    = "5_PARSE_HEADER"
-	StepParseStartDate = "6.1_PARSE_START_DATE"
-	StepParseEndDate   = "6.2_PARSE_END_DATE"
-	StepSaveExperiment = "7_SAVE_EXPERIMENT"
+	StepParseHeader    = "6_PARSE_HEADER"
+	StepParseStartDate = "7.1_PARSE_START_DATE"
+	StepParseEndDate   = "7.2_PARSE_END_DATE"
+	StepSaveExperiment = "8_SAVE_EXPERIMENT"
 
-	StepParseMeasures = "8.1.1_PARSE_MEASURES"
-	StepSaveMeasures  = "8.1.2_SAVE_MEASURES"
-	StepParseSamples  = "8.1.3_PARSE_SAMPLES_"
-	StepSaveSamples   = "8.1.4_SAVE_SAMPLES_"
+	StepParseMeasures = "9.1.1_PARSE_MEASURES"
+	StepSaveMeasures  = "9.1.2_SAVE_MEASURES"
+	StepParseSamples  = "9.1.3_PARSE_SAMPLES_"
+	StepSaveSamples   = "9.1.4_SAVE_SAMPLES_"
 
-	StepParseAlarms = "8.2.1_PARSE_ALARMS_"
-	StepSaveAlarms  = "8.2.2_SAVE_ALARMS_"
+	StepParseAlarms = "9.2.1_PARSE_ALARMS_"
+	StepSaveAlarms  = "9.2.2_SAVE_ALARMS_"
 
-	StepFullEnd = "9_END"
+	StepFullEnd = "10_END"
 
-	StepInsertPoints = "Y_INSERT_POINTS"
-	StepCancel       = "X_CANCEL"
+	StepCancel = "X_CANCEL"
 )
 
 type Report struct {

@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/leaklessgfy/safran-server/observer"
-	"github.com/leaklessgfy/safran-server/saver"
 
 	"github.com/leaklessgfy/safran-server/entity"
 	"github.com/leaklessgfy/safran-server/facade"
@@ -72,6 +71,14 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	report.AddSuccess(entity.StepExtractExperiment)
 
+	// SAVER
+	saver, err := service.ExtractSaver(r)
+	if err != nil {
+		jsonR.Encode(report.AddError(entity.StepExtractSaver, err))
+		return
+	}
+	report.AddSuccess(entity.StepExtractSaver)
+
 	// FILES
 	samplesFile, samplesSize, err := service.ExtractSamples(r)
 	if err != nil {
@@ -95,8 +102,6 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// IMPORT
-
-	saver := saver.FakeSaver{}
 	observer := observer.LoggerObserver{}
 	facade := facade.NewParserFacade(saver, observer, samplesFile, alarmsFile)
 

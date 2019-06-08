@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/leaklessgfy/safran-server/entity"
+	"github.com/leaklessgfy/safran-server/saver"
 )
 
 type Sizer interface {
@@ -29,6 +30,24 @@ func ExtractExperiment(r *http.Request) (*entity.Experiment, error) {
 		return nil, err
 	}
 	return &experiment, nil
+}
+
+func ExtractSaver(r *http.Request) (saver.Saver, error) {
+	saverValue := r.FormValue("saver")
+	if saverValue == "" {
+		return nil, errors.New("saver info is required")
+	}
+	switch saverValue {
+	case "csv":
+		file, err := os.Create("./csv/result.csv")
+		if err != nil {
+			return nil, err
+		}
+		return saver.NewCSVSaver(file), nil
+	case "fake":
+		return &saver.FakeSaver{}, nil
+	}
+	return nil, errors.New("no saver associated with " + saverValue)
 }
 
 func ExtractSamples(r *http.Request) (multipart.File, int64, error) {
@@ -63,22 +82,17 @@ func getSize(file multipart.File) (int64, error) {
 	if _, err := file.Seek(0, 0); err != nil {
 		return 0, err
 	}
-
 	sz, ok := file.(Sizer)
-
 	if ok {
 		return sz.Size(), nil
 	}
-
 	fi, ok := file.(*os.File)
 	if !ok {
 		return 0, errors.New("Can't determine file")
 	}
-
 	stats, err := fi.Stat()
 	if err != nil {
 		return 0, nil
 	}
-
 	return stats.Size(), nil
 }
