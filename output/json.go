@@ -15,7 +15,7 @@ import (
 type JSONOutput struct {
 	date    time.Time
 	length  int
-	buffers sync.Map
+	buffers [][]byte
 	group   *sync.WaitGroup
 }
 
@@ -30,6 +30,8 @@ func (o *JSONOutput) SaveExperiment(experiment *entity.Experiment) error {
 }
 
 func (o *JSONOutput) SaveMeasures(measures []*entity.Measure) error {
+	o.length = len(measures)
+	o.buffers = make([][]byte, o.length)
 	for _, measure := range measures {
 		f, err := os.Create("./dumps/" + strconv.Itoa(measure.Inc) + ".json")
 		if err != nil {
@@ -40,9 +42,8 @@ func (o *JSONOutput) SaveMeasures(measures []*entity.Measure) error {
 		if err != nil {
 			return err
 		}
-		o.buffers.Store(measure.Inc, make([]byte, 0))
+		o.buffers[measure.Inc] = make([]byte, 0)
 	}
-	o.length = len(measures)
 	return nil
 }
 
@@ -61,39 +62,27 @@ func (o *JSONOutput) SaveSamples(samples []*entity.Sample) error {
 		if sample.Inc >= o.length {
 			return errors.New("sample index > measures length, index=" + strconv.Itoa(sample.Inc) + ", length=" + strconv.Itoa(o.length))
 		}
-		former, ok := o.buffers.Load(sample.Inc)
-		if !ok {
-			return errors.New("Can't locate " + strconv.Itoa(sample.Inc) + " entry")
-		}
-		formerBytes, ok := former.([]byte)
-		if !ok {
-			return errors.New("Can't convert " + strconv.Itoa(sample.Inc) + " entry to bytes")
-		}
-		newBytes := append(formerBytes, append(b, byte(','))...)
-		o.buffers.Store(sample.Inc, newBytes)
+		o.buffers[sample.Inc] = append(o.buffers[sample.Inc], append(b, byte(','))...)
 	}
 
-	o.buffers.Range(func(k, v interface{}) bool {
-		bytes, ok := v.([]byte)
-		if !ok {
-			return false
-		}
-		key, ok := k.(int)
-		if !ok {
-			return false
-		}
-		if len(bytes) > 1000 {
+	var keys []int
+	for key, buffer := range o.buffers {
+		if len(buffer) > 1000 {
 			o.group.Add(1)
 			go func() {
-				err := o.flushBuffer(key)
+				err := flushBuffer(key, buffer)
 				if err != nil {
 					log.Println("[CONCURRENT]", err)
 				}
 				o.group.Done()
 			}()
+			keys = append(keys, key)
 		}
-		return true
-	})
+	}
+
+	for _, key := range keys {
+		o.buffers[key] = make([]byte, 0)
+	}
 
 	return nil
 }
@@ -135,24 +124,15 @@ func (o JSONOutput) End() error {
 	return nil
 }
 
-func (o *JSONOutput) flushBuffer(index int) error {
+func flushBuffer(index int, buffer []byte) error {
 	f, err := os.OpenFile("./dumps/"+strconv.Itoa(index)+".json", os.O_WRONLY|os.O_APPEND, 0777)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	it, ok := o.buffers.Load(index)
-	if !ok {
-		return errors.New("Can't locate " + strconv.Itoa(index) + " inside map")
-	}
-	bytes, ok := it.([]byte)
-	if !ok {
-		return errors.New("Can't convert value of map to bytes")
-	}
-	_, err = f.Write(bytes)
+	_, err = f.Write(buffer)
 	if err != nil {
 		return err
 	}
-	o.buffers.Store(index, make([]byte, 0))
 	return nil
 }
