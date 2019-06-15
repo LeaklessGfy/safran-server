@@ -2,7 +2,6 @@ package output
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	client "github.com/influxdata/influxdb1-client/v2"
@@ -20,6 +19,7 @@ type InfluxOutput struct {
 	c            client.Client
 	experimentID string
 	date         time.Time
+	measuresID   []string
 }
 
 func NewInfluxOutput() (*InfluxOutput, error) {
@@ -51,17 +51,18 @@ func (o *InfluxOutput) SaveExperiment(experiment *entity.Experiment) error {
 	return nil
 }
 
-func (o InfluxOutput) SaveMeasures(measures []*entity.Measure) error {
+func (o *InfluxOutput) SaveMeasures(measures []*entity.Measure) error {
 	batchPoints, err := buildBatchPoints()
 	if err != nil {
 		return err
 	}
 	for _, measure := range measures {
-		point, err := buildMeasurePoint(o.experimentID, measure)
+		id, point, err := buildMeasurePoint(o.experimentID, measure)
 		if err != nil {
 			return err
 		}
 		batchPoints.AddPoint(point)
+		o.measuresID = append(o.measuresID, id)
 	}
 	return o.c.Write(batchPoints)
 }
@@ -72,7 +73,7 @@ func (o InfluxOutput) SaveSamples(samples []*entity.Sample) error {
 		return err
 	}
 	for _, sample := range samples {
-		point, err := buildSamplePoint(o.experimentID, o.date, sample)
+		point, err := buildSamplePoint(o.experimentID, o.measuresID[sample.Inc], o.date, sample)
 		if err != nil {
 			return err
 		}
@@ -153,10 +154,10 @@ func buildExperimentPoint(experiment *entity.Experiment) (string, *client.Point,
 	return id.String(), point, err
 }
 
-func buildMeasurePoint(experimentID string, measure *entity.Measure) (*client.Point, error) {
+func buildMeasurePoint(experimentID string, measure *entity.Measure) (string, *client.Point, error) {
 	id, err := uuid.NewV4()
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	tags := map[string]string{
 		"id":           id.String(),
@@ -167,13 +168,14 @@ func buildMeasurePoint(experimentID string, measure *entity.Measure) (*client.Po
 		"type": measure.Typex,
 		"unit": measure.Unitx,
 	}
-	return client.NewPoint("measures", tags, fields, time.Now())
+	point, err := client.NewPoint("measures", tags, fields, time.Now())
+	return id.String(), point, err
 }
 
-func buildSamplePoint(experimentID string, experimentDate time.Time, sample *entity.Sample) (*client.Point, error) {
+func buildSamplePoint(experimentID, measureID string, experimentDate time.Time, sample *entity.Sample) (*client.Point, error) {
 	tags := map[string]string{
 		"experimentID": experimentID,
-		"inc":          strconv.Itoa(sample.Inc),
+		"measureID":    measureID,
 	}
 	fields := map[string]interface{}{
 		"value": sample.Value,
