@@ -135,10 +135,7 @@ func buildBatchPoints() (client.BatchPoints, error) {
 }
 
 func buildExperimentPoint(experiment *entity.Experiment) (string, *client.Point, error) {
-	id, err := uuid.NewV4()
-	if err != nil {
-		return "", nil, err
-	}
+	id := uuid.NewV4()
 	tags := map[string]string{
 		"id": id.String(),
 	}
@@ -155,10 +152,7 @@ func buildExperimentPoint(experiment *entity.Experiment) (string, *client.Point,
 }
 
 func buildMeasurePoint(experimentID string, measure *entity.Measure) (string, *client.Point, error) {
-	id, err := uuid.NewV4()
-	if err != nil {
-		return "", nil, err
-	}
+	id := uuid.NewV4()
 	tags := map[string]string{
 		"id":           id.String(),
 		"experimentID": experimentID,

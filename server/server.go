@@ -53,12 +53,7 @@ func (s Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	r.ParseMultipartForm(32 << 20)
 
-	channelUUID, err := uuid.NewV4()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	channelUUID := uuid.NewV4()
 	channelID := channelUUID.String()
 	jsonR := json.NewEncoder(w)
 	report := entity.NewReport(channelID)
