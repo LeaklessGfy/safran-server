@@ -144,8 +144,8 @@ func buildExperimentPoint(experiment *entity.Experiment) (string, *client.Point,
 		"name":      experiment.Name,
 		"bench":     experiment.Bench,
 		"campaign":  experiment.Campaign,
-		"startDate": experiment.StartDate,
-		"endDate":   experiment.EndDate,
+		"startDate": experiment.StartDate.UnixNano() / 1000000,
+		"endDate":   experiment.EndDate.UnixNano() / 1000000,
 	}
 	point, err := client.NewPoint("experiments", tags, fields, experiment.StartDate)
 	return id.String(), point, err
